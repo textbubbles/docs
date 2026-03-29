@@ -1,0 +1,211 @@
+# Customer Onboarding Guide
+
+This guide walks through the complete process of setting up a new TextBubbles customer, from account creation to generating their API key.
+
+## Prerequisites
+
+- Admin API key (stored in `.env` as `ADMIN_API_KEY`)
+- A BlueBubbles instance with available capacity (or shared default instance)
+
+## Quick Start
+
+### 1. Create Customer
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/admin/customers \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "customer@example.com",
+    "name": "John Smith",
+    "company": "Acme Inc"
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "cust_abc123...",
+    "email": "customer@example.com",
+    "name": "John Smith",
+    "company": "Acme Inc",
+    "createdAt": "2026-03-29T00:00:00.000Z"
+  }
+}
+```
+
+### 2. Assign Phone Number
+
+Each customer needs at least one phone number to send messages from. For the MVP/shared infrastructure, all customers use the same default number.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/admin/customers/{customerId}/numbers \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phoneNumber": "+19097807058",
+    "provider": "bluebubbles"
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "num_xyz789...",
+    "phoneNumber": "+19097807058",
+    "capabilities": {
+      "imessage": true,
+      "sms": true,
+      "whatsapp": false
+    },
+    "isDefault": true
+  }
+}
+```
+
+### 3. Generate API Key
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/admin/keys \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Production Key",
+    "customerEmail": "customer@example.com"
+  }'
+```
+
+**Response (key shown only once):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "key_def456...",
+    "key": "tb_YazuSEcL26IEUYE3wPSj3yfP0ioEtzRF",
+    "name": "Production Key",
+    "customerEmail": "customer@example.com",
+    "createdAt": "2026-03-29T00:00:00.000Z"
+  }
+}
+```
+
+**⚠️ Important:** Save the `key` value immediately. It is only returned once and cannot be retrieved later.
+
+---
+
+## Complete Admin API Reference
+
+### Customers
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/admin/customers` | POST | Create customer |
+| `/v1/admin/customers` | GET | List all customers |
+| `/v1/admin/customers/:id` | GET | Get customer details |
+| `/v1/admin/customers/:id/numbers` | POST | Assign phone number |
+| `/v1/admin/customers/:id/numbers/:numberId` | DELETE | Remove phone number |
+| `/v1/admin/customers/:id/numbers/:numberId/default` | PUT | Set default number |
+
+### API Keys
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/admin/keys` | POST | Generate API key |
+| `/v1/admin/keys` | GET | List all keys (without secrets) |
+| `/v1/admin/keys/:id` | DELETE | Revoke API key |
+
+### Usage & Monitoring
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/admin/usage` | GET | Query usage records |
+
+---
+
+## Multi-Tenant Architecture (Future)
+
+TextBubbles supports dedicated phone numbers via separate BlueBubbles instances:
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────────┐
+│ Customer A  │────▶│ BlueBubbles #1   │────▶│ iCloud A (+1555...)│
+└─────────────┘     └──────────────────┘     └─────────────────────┘
+                    
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────────┐
+│ Customer B  │────▶│ BlueBubbles #2   │────▶│ iCloud B (+1666...)│
+└─────────────┘     └──────────────────┘     └─────────────────────┘
+```
+
+### Managing BlueBubbles Instances
+
+```bash
+# Create a new instance (admin only)
+curl -X POST https://api.textbubbles.com/v1/admin/instances \
+  -H "Authorization: Bearer $ADMIN_API_KEY" \
+  -d '{
+    "name": "Customer B Instance",
+    "url": "http://192.168.0.20:1235",
+    "password": "instance-password",
+    "phoneNumber": "+16665551234",
+    "icloudEmail": "customerb@icloud.com",
+    "hostType": "mac_vm",
+    "maxCustomers": 1
+  }'
+```
+
+### Host Types
+
+| Type | Description | Scaling |
+|------|-------------|---------|
+| `mac_user` | Fast User Switching on shared Mac | ~5 users per Mac Mini |
+| `mac_vm` | Virtualized macOS (UTM, Parallels) | 2-4 VMs per Mac |
+| `dedicated` | Dedicated Mac hardware | 1 instance per device |
+
+---
+
+## Scaling Strategy
+
+### Phase 1: Shared Infrastructure (Current)
+- Single BlueBubbles instance
+- All customers share one sender number
+- Best for: MVP, low volume, internal testing
+
+### Phase 2: Fast User Switching
+- Multiple macOS user accounts
+- Each user = separate iCloud/BlueBubbles
+- Up to 5 concurrent users per Mac Mini
+- Requires: macOS user management, automated login
+
+### Phase 3: Mac VMs
+- UTM/Parallels virtualization
+- 2-4 macOS VMs per Apple Silicon Mac
+- Each VM runs separate BlueBubbles
+- Requires: VM orchestration, resource management
+
+### Phase 4: Dedicated Hardware
+- Mac Mini cluster (Mac Mini M4 recommended)
+- One customer per device
+- Highest reliability and isolation
+- Cost: ~$500-600 per customer endpoint
+
+---
+
+## Troubleshooting
+
+### "NUMBER_NOT_OWNED" Error
+Customer is trying to send from a number not assigned to them.
+- Check assigned numbers: `GET /v1/admin/customers/:id`
+- Assign the correct number or use their default
+
+### "NO_DEFAULT_NUMBER" Error
+Customer has no phone numbers assigned.
+- Assign at least one number with `POST /v1/admin/customers/:id/numbers`
+
+### API Key Not Working
+- Verify the key hasn't been revoked: `GET /v1/admin/keys`
+- Check the key prefix is `tb_`
+- Ensure proper `Authorization: Bearer` header format
