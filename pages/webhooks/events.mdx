@@ -1,0 +1,102 @@
+# Event Reference
+
+All webhook event types and their payloads.
+
+## Payload Structure
+
+Every webhook event follows this structure:
+
+```json
+{
+  "id": "evt_550e8400-e29b-41d4-a716-446655440000",
+  "type": "message.delivered",
+  "timestamp": "2026-03-28T10:00:03.000Z",
+  "data": {
+    "messageId": "msg_xyz",
+    "externalMessageId": "external-guid",
+    "from": "+19876543210",
+    "to": "+14155551234",
+    "text": "Hello!",
+    "channel": "imessage",
+    "metadata": { "customKey": "customValue" },
+    "status": "delivered"
+  }
+}
+```
+
+## Message Events
+
+| Event | Description |
+|-------|-------------|
+| `message.queued` | Message accepted and queued for delivery |
+| `message.sent` | Message sent to the carrier/provider |
+| `message.delivered` | Delivery confirmed by the recipient's device |
+| `message.read` | Read receipt received (iMessage only) |
+| `message.failed` | Message delivery failed |
+| `message.fallback` | Fallback triggered (e.g., iMessage to SMS) |
+| `message.inbound` | Inbound message received from a contact |
+
+## Scheduled Message Events
+
+| Event | Description |
+|-------|-------------|
+| `message.scheduled` | Message scheduled for future delivery |
+| `message.schedule_cancelled` | Scheduled message was cancelled |
+
+## Typing Events
+
+| Event | Description |
+|-------|-------------|
+| `typing.indicator` | Typing indicator activity detected |
+
+## Payment Events
+
+| Event | Description |
+|-------|-------------|
+| `payment.request.created` | Payment request sent |
+| `payment.request.paid` | Payment detected via incoming message |
+| `payment.request.cancelled` | Payment request cancelled |
+| `payment.request.expired` | Payment request expired |
+
+## FaceTime Events
+
+| Event | Description |
+|-------|-------------|
+| `facetime.incoming` | Incoming FaceTime call detected |
+| `facetime.status_changed` | Call status update (answered, disconnected, etc.) |
+
+## Inbound Message Payload
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "message.inbound",
+  "timestamp": "2026-03-28T10:00:00.000Z",
+  "data": {
+    "messageId": "msg_xyz789",
+    "from": "+14155551234",
+    "text": "Hello!",
+    "channel": "imessage"
+  }
+}
+```
+
+## Subscribing to Events
+
+Select which events to receive when configuring your webhook:
+
+```bash
+curl -X PUT https://api.textbubbles.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": [
+      "message.sent",
+      "message.delivered",
+      "message.failed",
+      "message.inbound",
+      "payment.request.paid"
+    ]
+  }'
+```

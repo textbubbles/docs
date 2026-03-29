@@ -1,0 +1,82 @@
+# Payment Requests (Apple Cash)
+
+Request payments via iMessage by sending a formatted payment request message. The recipient must manually send payment via Apple Cash.
+
+## How It Works
+
+1. **Send a payment request** — the API sends a formatted iMessage with the amount and note
+2. **Auto-detect payments** — when an incoming message matches Apple Cash patterns (e.g., "sent you $25.00"), the system marks matching requests as paid
+3. **Webhook notifications** — receive real-time events for creation, payment detection, and cancellation
+
+## Request a Payment
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/payments/request \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "amount": 25.00,
+    "currency": "USD",
+    "note": "For dinner last night"
+  }'
+```
+
+**Response (202 Accepted):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "pay_550e8400-e29b-41d4-a716-446655440000",
+    "messageId": "msg_123...",
+    "to": "+14155551234",
+    "amount": "25.00",
+    "currency": "USD",
+    "note": "For dinner last night",
+    "status": "pending",
+    "createdAt": "2026-03-28T10:00:00.000Z"
+  }
+}
+```
+
+## List Payment Requests
+
+```bash
+curl "https://api.textbubbles.com/v1/payments/requests?status=pending" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Filter options: `status` (`pending`, `paid`, `cancelled`, `expired`), `from`, `to`, `limit`.
+
+## Cancel a Payment Request
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/payments/requests/pay_xxx/cancel \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Webhook Events
+
+| Event | Description |
+|-------|-------------|
+| `payment.request.created` | Payment request sent |
+| `payment.request.paid` | Payment detected via incoming message |
+| `payment.request.cancelled` | Payment request cancelled |
+| `payment.request.expired` | Payment request expired |
+
+## Limitations
+
+- Sends a **formatted message**, not an actual Apple Pay request
+- Recipient must manually use Apple Cash to send payment
+- Payment detection relies on pattern matching of incoming iMessages
+- Only USD currency is currently supported
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/payments/request` | Request a payment |
+| `GET` | `/v1/payments/requests` | List payment requests |
+| `GET` | `/v1/payments/requests/:id` | Get request details |
+| `POST` | `/v1/payments/requests/:id/cancel` | Cancel a request |

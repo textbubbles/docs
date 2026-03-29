@@ -1,0 +1,95 @@
+# TypeScript
+
+The `@textbubbles/js` SDK is written in TypeScript and ships with full type definitions.
+
+## Type-Safe Messages
+
+```typescript
+import { TextBubbles } from '@textbubbles/js';
+import type { SendMessageOptions, Message, MessageEffect } from '@textbubbles/js';
+
+const tb = new TextBubbles();
+
+const options: SendMessageOptions = {
+  to: '+14155551234',
+  content: { text: 'Hello!' },
+  effect: 'confetti',
+  idempotencyKey: 'order-123',
+};
+
+const message: Message = await tb.messages.send(options);
+```
+
+## Available Types
+
+```typescript
+import type {
+  // Client
+  TextBubblesConfig,
+
+  // Messages
+  SendMessageOptions,
+  Message,
+  MessageStatus,
+  MessageEffect,
+
+  // Contacts
+  Contact,
+  CreateContactOptions,
+
+  // Webhooks
+  WebhookEvent,
+  WebhookConfig,
+
+  // Payments
+  PaymentRequest,
+  CreatePaymentOptions,
+
+  // Capabilities
+  Capabilities,
+} from '@textbubbles/js';
+```
+
+## Error Handling
+
+```typescript
+import { TextBubbles, TextBubblesError } from '@textbubbles/js';
+
+const tb = new TextBubbles();
+
+try {
+  await tb.messages.send({
+    to: '+14155551234',
+    content: { text: 'Hello!' },
+  });
+} catch (error) {
+  if (error instanceof TextBubblesError) {
+    console.error(`API Error: ${error.code} - ${error.message}`);
+    console.error(`Request ID: ${error.requestId}`);
+    console.error(`Status: ${error.statusCode}`);
+  }
+}
+```
+
+## Webhook Type Guards
+
+```typescript
+import type { WebhookEvent } from '@textbubbles/js';
+
+function handleWebhook(event: WebhookEvent) {
+  switch (event.type) {
+    case 'message.delivered':
+      // event.data is typed as DeliveredEventData
+      console.log(`Delivered: ${event.data.messageId}`);
+      break;
+    case 'message.inbound':
+      // event.data is typed as InboundEventData
+      console.log(`From ${event.data.from}: ${event.data.text}`);
+      break;
+    case 'payment.request.paid':
+      // event.data is typed as PaymentPaidEventData
+      console.log(`Payment received: $${event.data.amount}`);
+      break;
+  }
+}
+```

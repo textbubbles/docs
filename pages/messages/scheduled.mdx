@@ -1,0 +1,50 @@
+# Scheduled Messages
+
+Schedule messages for future delivery, up to 30 days ahead. The scheduler checks every minute for messages ready to send.
+
+## Schedule a Message
+
+Include `scheduledAt` with an ISO 8601 datetime when sending:
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": { "text": "Happy Birthday!" },
+    "scheduledAt": "2026-04-01T09:00:00Z"
+  }'
+```
+
+The response returns `status: "scheduled"` instead of `"queued"`.
+
+## List Scheduled Messages
+
+```bash
+curl https://api.textbubbles.com/v1/messages/scheduled \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Cancel a Scheduled Message
+
+```bash
+curl -X DELETE https://api.textbubbles.com/v1/messages/msg_abc123/schedule \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Only messages with status `"scheduled"` can be cancelled.
+
+## Webhook Events
+
+| Event | Description |
+|-------|-------------|
+| `message.scheduled` | Message scheduled for future delivery |
+| `message.schedule_cancelled` | Scheduled message was cancelled |
+
+## Constraints
+
+- `scheduledAt` must be a valid ISO 8601 datetime in the future
+- Maximum scheduling window is **30 days**
+- Only messages with status `"scheduled"` can be cancelled
+- All other message options (effects, attachments, etc.) work with scheduled messages

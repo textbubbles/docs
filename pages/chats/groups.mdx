@@ -1,0 +1,83 @@
+# Group Chats
+
+Create and manage iMessage group conversations.
+
+## Create a Group Chat
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/groups \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "participants": ["+14155551234", "+14155559876"],
+    "name": "Project Team"
+  }'
+```
+
+## Get Chat Details
+
+```bash
+curl https://api.textbubbles.com/v1/chats/CHAT_ID \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Rename a Group
+
+```bash
+curl -X PUT https://api.textbubbles.com/v1/chats/CHAT_ID/name \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "New Group Name"
+  }'
+```
+
+## Add a Participant
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/CHAT_ID/participants \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phoneNumber": "+14155557777"
+  }'
+```
+
+## Remove a Participant
+
+```bash
+curl -X DELETE https://api.textbubbles.com/v1/chats/CHAT_ID/participants/PARTICIPANT_ID \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Leave a Group
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/CHAT_ID/leave \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Send a Message to a Group
+
+Use the standard [Send Messages](/messages/send) endpoint with the chat ID:
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "CHAT_ID",
+    "content": { "text": "Hello team!" }
+  }'
+```
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/chats/groups` | Create group chat |
+| `GET` | `/v1/chats/:chatId` | Get chat details |
+| `PUT` | `/v1/chats/:chatId/name` | Rename group |
+| `POST` | `/v1/chats/:chatId/participants` | Add participant |
+| `DELETE` | `/v1/chats/:chatId/participants/:id` | Remove participant |
+| `POST` | `/v1/chats/:chatId/leave` | Leave group |

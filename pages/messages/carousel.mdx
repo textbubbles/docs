@@ -1,0 +1,63 @@
+# Image Carousels
+
+Send multiple images as a swipeable gallery via `POST /v1/messages/carousel`. Images are sent as rapid sequential messages that group visually in the conversation.
+
+## Send a Carousel
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages/carousel \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "mediaUrls": [
+      "https://cdn.example.com/photo1.jpg",
+      "https://cdn.example.com/photo2.png",
+      "https://cdn.example.com/photo3.webp"
+    ],
+    "text": "Check out these photos!",
+    "effect": "fireworks"
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_abc123",
+    "status": "queued",
+    "to": "+14155551234",
+    "messageType": "carousel",
+    "imageCount": 3,
+    "createdAt": "2026-03-28T00:00:00.000Z"
+  }
+}
+```
+
+## Parameters
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `to` | Yes | Recipient phone number (E.164 format) |
+| `mediaUrls` | Yes | Array of 2-20 HTTPS image URLs (jpg, png, gif, webp) |
+| `text` | No | Caption text sent with the first image |
+| `effect` | No | iMessage effect for the first message |
+| `idempotencyKey` | No | Unique key to prevent duplicate sends |
+| `callbackUrl` | No | Webhook URL for delivery status updates |
+| `metadata` | No | Custom key-value metadata |
+
+## How It Works
+
+1. The first image is sent as an iMessage with optional text caption and effect
+2. Remaining images are sent as rapid sequential attachments
+3. iMessage groups these into a visual gallery in the conversation
+4. The message is tracked as a single `carousel` type
+
+## Limitations
+
+- Requires iMessage (falls back to SMS with MMS support)
+- All URLs must be HTTPS and point to image files
+- Minimum 2 images, maximum 20 images per carousel
+- Images are sent sequentially, not as a single atomic message

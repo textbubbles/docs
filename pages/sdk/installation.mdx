@@ -1,0 +1,55 @@
+# Installation
+
+Install the TextBubbles JavaScript/TypeScript SDK.
+
+## Install
+
+```bash npm2yarn
+npm install @textbubbles/js
+```
+
+## Quick Start
+
+```typescript
+import { TextBubbles } from '@textbubbles/js';
+
+const tb = new TextBubbles({
+  apiKey: process.env.TEXTBUBBLES_API_KEY,
+});
+
+// Send a message
+const message = await tb.messages.send({
+  to: '+14155551234',
+  content: { text: 'Hello from the SDK!' },
+});
+
+console.log(`Message queued: ${message.id}`);
+```
+
+## Configuration
+
+```typescript
+const tb = new TextBubbles({
+  apiKey: 'tb_xxxxxxxxxxxxx',     // Required
+  baseUrl: 'https://api.textbubbles.com', // Optional, defaults to production
+  timeout: 30000,                  // Optional, request timeout in ms
+});
+```
+
+## Environment Variables
+
+The SDK automatically reads from `TEXTBUBBLES_API_KEY` if no `apiKey` is provided:
+
+```bash
+export TEXTBUBBLES_API_KEY=tb_xxxxxxxxxxxxx
+```
+
+```typescript
+// Will use TEXTBUBBLES_API_KEY env var
+const tb = new TextBubbles();
+```
+
+## Requirements
+
+- Node.js 18+ (uses native `fetch`)
+- TypeScript 5.0+ (optional, for type checking)

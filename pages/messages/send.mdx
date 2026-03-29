@@ -1,0 +1,160 @@
+# Send Messages
+
+Send iMessages with automatic SMS fallback via `POST /v1/messages`.
+
+## Basic Message
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": {
+      "text": "Hello!"
+    }
+  }'
+```
+
+Phone numbers must be in E.164 format (e.g., `+14155551234`). The `content.text` field supports 1-10,000 characters.
+
+## With Effects (iMessage Only)
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": { "text": "Congratulations!" },
+    "effect": "confetti"
+  }'
+```
+
+See [Message Effects](/messages/effects) for all available effects.
+
+## Reply to a Message
+
+Create a threaded reply using the `replyTo` field (iMessage only):
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": { "text": "Thanks for letting me know!" },
+    "replyTo": "msg_550e8400-e29b-41d4-a716-446655440000"
+  }'
+```
+
+## With Attachments
+
+**URL attachment (iMessage):**
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": { "text": "Check out this image" },
+    "attachments": [
+      {
+        "type": "url",
+        "url": "https://example.com/photo.jpg",
+        "mimeType": "image/jpeg",
+        "filename": "photo.jpg"
+      }
+    ]
+  }'
+```
+
+**Media URL (SMS/MMS):**
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": {
+      "text": "Check out this image",
+      "mediaUrl": "https://example.com/photo.jpg"
+    },
+    "routing": { "preference": ["sms"] }
+  }'
+```
+
+## Channel Routing
+
+By default, messages try iMessage first and fall back to SMS. Customize with the `routing` field:
+
+```json
+{
+  "to": "+14155551234",
+  "content": { "text": "Hello!" },
+  "routing": {
+    "preference": ["imessage", "sms"],
+    "fallback": true
+  }
+}
+```
+
+- `preference` — ordered list of channels: `"imessage"`, `"sms"`
+- `fallback` — try the next channel if the first fails (default: `true`)
+
+## Unsend a Message
+
+Retract a sent iMessage:
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/unsend \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Edit a Message
+
+Update sent message content (iMessage only):
+
+```bash
+curl -X PUT https://api.textbubbles.com/v1/messages/msg_abc123 \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": { "text": "Updated message text" }
+  }'
+```
+
+## Idempotency
+
+Include an `idempotencyKey` to prevent duplicate sends during retries:
+
+```json
+{
+  "to": "+14155551234",
+  "content": { "text": "Your order #12345 has shipped!" },
+  "idempotencyKey": "shipment-notification-12345"
+}
+```
+
+If a message with the same key already exists, the API returns `200 OK` with the existing message.
+
+## Full Request Schema
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `to` | string | Yes | Recipient phone number (E.164 format) |
+| `content.text` | string | Yes | Message text (1-10,000 chars) |
+| `content.mediaUrl` | string | No | Media URL for SMS/MMS |
+| `routing.preference` | string[] | No | Channel priority (default: `["imessage", "sms"]`) |
+| `routing.fallback` | boolean | No | Enable fallback (default: `true`) |
+| `replyTo` | string | No | Message ID to reply to (iMessage only) |
+| `attachments` | object[] | No | File attachments (iMessage only) |
+| `effect` | string | No | Message effect (iMessage only) |
+| `mentions` | object[] | No | @mentions in group chats |
+| `scheduledAt` | string | No | ISO 8601 datetime for scheduled delivery |
+| `idempotencyKey` | string | No | Unique key for deduplication |
+| `callbackUrl` | string | No | Per-message webhook URL |
+| `metadata` | object | No | Custom key-value data |
+| `createContact` | boolean | No | Auto-create contact if not exists |

@@ -1,0 +1,108 @@
+# API Reference
+
+Complete list of all TextBubbles API endpoints. Base URL: `https://api.textbubbles.com`
+
+## Messages
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/messages` | [Send a message](/messages/send) |
+| `GET` | `/v1/messages` | [List messages](/messages/list) |
+| `GET` | `/v1/messages/:id` | [Get message status](/messages/list) |
+| `POST` | `/v1/messages/:id/unsend` | [Unsend a message](/messages/send#unsend-a-message) |
+| `PUT` | `/v1/messages/:id` | [Edit a message](/messages/send#edit-a-message) |
+| `POST` | `/v1/messages/:id/reactions` | [Send tapback reaction](/messages/reactions) |
+| `POST` | `/v1/messages/carousel` | [Send image carousel](/messages/carousel) |
+| `GET` | `/v1/messages/scheduled` | [List scheduled messages](/messages/scheduled) |
+| `DELETE` | `/v1/messages/:id/schedule` | [Cancel scheduled message](/messages/scheduled#cancel-a-scheduled-message) |
+
+## Group Chats
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/chats/groups` | [Create group chat](/chats/groups) |
+| `GET` | `/v1/chats/:chatId` | [Get chat details](/chats/groups#get-chat-details) |
+| `PUT` | `/v1/chats/:chatId/name` | [Rename group](/chats/groups#rename-a-group) |
+| `POST` | `/v1/chats/:chatId/participants` | [Add participant](/chats/groups#add-a-participant) |
+| `DELETE` | `/v1/chats/:chatId/participants/:id` | [Remove participant](/chats/groups#remove-a-participant) |
+| `POST` | `/v1/chats/:chatId/leave` | [Leave group](/chats/groups#leave-a-group) |
+| `POST` | `/v1/chats/:chatId/typing` | [Send typing indicator](/chats/typing) |
+
+## Capabilities
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/capabilities/:phone` | Check iMessage/SMS/FaceTime support |
+
+## Contacts
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/contacts` | [Create a contact](/contacts) |
+| `GET` | `/v1/contacts` | [List contacts](/contacts#list-and-search) |
+| `GET` | `/v1/contacts/:id` | [Get a contact](/contacts#get-a-contact) |
+| `PUT` | `/v1/contacts/:id` | [Update a contact](/contacts#update-a-contact) |
+| `DELETE` | `/v1/contacts/:id` | [Delete a contact](/contacts#delete-a-contact) |
+| `POST` | `/v1/contacts/bulk` | [Bulk create](/contacts#bulk-operations) |
+| `DELETE` | `/v1/contacts/bulk` | [Bulk delete](/contacts#bulk-operations) |
+| `GET` | `/v1/contacts/:phone/focus` | [Get Focus status](/contacts#focus-status) |
+| `GET` | `/v1/contacts/:phone/facetime` | Get FaceTime availability |
+
+## Payment Requests
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/payments/request` | [Request a payment](/payments) |
+| `GET` | `/v1/payments/requests` | [List payment requests](/payments#list-payment-requests) |
+| `GET` | `/v1/payments/requests/:id` | Get payment request details |
+| `POST` | `/v1/payments/requests/:id/cancel` | [Cancel a request](/payments#cancel-a-payment-request) |
+
+## Webhooks
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/webhooks` | [Get webhook config](/webhooks/setup) |
+| `PUT` | `/v1/webhooks` | [Set webhook URL & events](/webhooks/setup) |
+
+## Contact Sharing (Profile)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/profile/state` | Get contact sharing profile |
+| `POST` | `/v1/profile` | Set contact sharing profile |
+| `DELETE` | `/v1/profile` | Remove contact sharing profile |
+
+## Admin
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/admin/keys` | Create API key |
+| `GET` | `/v1/admin/keys` | List API keys |
+| `DELETE` | `/v1/admin/keys/:id` | Revoke API key |
+| `GET` | `/v1/admin/usage` | Get usage stats |
+
+## System
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check |
+| `GET` | `/docs` | API documentation (Scalar UI) |
+
+## Error Codes
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `UNAUTHORIZED` | 401 | Missing or invalid Bearer token |
+| `VALIDATION_ERROR` | 400 | Request body failed validation |
+| `INVALID_PHONE_NUMBER` | 400 | Phone number not in E.164 format |
+| `NOT_FOUND` | 404 | Resource not found |
+| `REPLY_NOT_FOUND` | 404 | Reply target message not found |
+| `CHANNEL_NOT_SUPPORTED` | 400 | Operation not supported on channel |
+| `NO_CHANNEL_AVAILABLE` | 400 | Recipient not reachable |
+| `SMS_NOT_CONFIGURED` | 400 | SMS providers not configured |
+| `ALREADY_UNSENT` | 409 | Message already unsent |
+| `ALREADY_DELETED` | 409 | Message already deleted |
+| `RATE_LIMITED` | 429 | Too many requests |
+| `IMESSAGE_SEND_FAILED` | 500 | iMessage provider error |
+| `SMS_SEND_FAILED` | 500 | SMS provider error |
+| `INTERNAL_ERROR` | 500 | Unexpected server error |

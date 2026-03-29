@@ -1,0 +1,111 @@
+# Getting Started
+
+Get up and running with TextBubbles in under 5 minutes.
+
+## 1. Get Your API Key
+
+Contact your account administrator to obtain an API key. Keys follow the format `tb_xxxxxxxxxxxxx`.
+
+## 2. Send Your First Message
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": {
+      "text": "Hello from TextBubbles!"
+    }
+  }'
+```
+
+**Response (202 Accepted):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_550e8400-e29b-41d4-a716-446655440000",
+    "status": "queued",
+    "to": "+14155551234",
+    "createdAt": "2026-03-28T10:00:00.000Z"
+  },
+  "requestId": "req_550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+## 3. Check Message Status
+
+```bash
+curl https://api.textbubbles.com/v1/messages/msg_550e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_550e8400-e29b-41d4-a716-446655440000",
+    "status": "delivered",
+    "to": "+14155551234",
+    "from": "+19876543210",
+    "channel": "imessage",
+    "content": {
+      "text": "Hello from TextBubbles!"
+    },
+    "timeline": [
+      { "status": "queued", "at": "2026-03-28T10:00:00Z", "channel": null },
+      { "status": "sent", "at": "2026-03-28T10:00:01Z", "channel": "imessage" },
+      { "status": "delivered", "at": "2026-03-28T10:00:03Z", "channel": "imessage" }
+    ],
+    "fallbackTriggered": false,
+    "createdAt": "2026-03-28T10:00:00Z"
+  }
+}
+```
+
+## 4. Check Capabilities
+
+Before using iMessage-specific features, verify the recipient supports iMessage:
+
+```bash
+curl https://api.textbubbles.com/v1/capabilities/+14155551234 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "phoneNumber": "+14155551234",
+    "capabilities": {
+      "imessage": true,
+      "sms": true,
+      "facetime": true
+    },
+    "recommendedChannel": "imessage"
+  }
+}
+```
+
+## 5. Set Up Webhooks
+
+Receive real-time delivery updates and inbound messages:
+
+```bash
+curl -X PUT https://api.textbubbles.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": ["message.sent", "message.delivered", "message.inbound"],
+    "secret": "whsec_your_signing_secret"
+  }'
+```
+
+## Next Steps
+
+- [Send messages](/messages/send) with effects, replies, and attachments
+- [Set up webhooks](/webhooks/setup) for real-time updates
+- [Install the SDK](/sdk/installation) for TypeScript/Node.js

@@ -1,0 +1,148 @@
+# Next.js Integration
+
+Use TextBubbles in your Next.js application with server-side API routes.
+
+## Setup
+
+```bash npm2yarn
+npm install @textbubbles/js
+```
+
+Add your API key to `.env.local`:
+
+```bash
+TEXTBUBBLES_API_KEY=tb_xxxxxxxxxxxxx
+TEXTBUBBLES_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx
+```
+
+## Server Action (App Router)
+
+```typescript
+// app/actions/send-message.ts
+'use server';
+
+import { TextBubbles } from '@textbubbles/js';
+
+const tb = new TextBubbles();
+
+export async function sendMessage(to: string, text: string) {
+  const message = await tb.messages.send({
+    to,
+    content: { text },
+  });
+
+  return { id: message.id, status: message.status };
+}
+```
+
+## API Route (App Router)
+
+```typescript
+// app/api/send/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { TextBubbles } from '@textbubbles/js';
+
+const tb = new TextBubbles();
+
+export async function POST(request: NextRequest) {
+  const { to, text } = await request.json();
+
+  const message = await tb.messages.send({
+    to,
+    content: { text },
+  });
+
+  return NextResponse.json({ id: message.id, status: message.status });
+}
+```
+
+## Webhook Handler
+
+```typescript
+// app/api/webhooks/textbubbles/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+
+const WEBHOOK_SECRET = process.env.TEXTBUBBLES_WEBHOOK_SECRET!;
+
+export async function POST(request: NextRequest) {
+  const signature = request.headers.get('x-signature');
+  const timestamp = request.headers.get('x-timestamp');
+  const body = await request.text();
+
+  // Verify signature
+  if (!signature || !timestamp) {
+    return NextResponse.json({ error: 'Missing headers' }, { status: 401 });
+  }
+
+  const age = Math.abs(Date.now() / 1000 - parseInt(timestamp));
+  if (age > 300) {
+    return NextResponse.json({ error: 'Request too old' }, { status: 401 });
+  }
+
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', WEBHOOK_SECRET)
+    .update(`${timestamp}.${body}`)
+    .digest('hex');
+
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+  }
+
+  // Process the event
+  const event = JSON.parse(body);
+
+  switch (event.type) {
+    case 'message.inbound':
+      console.log(`Message from ${event.data.from}: ${event.data.text}`);
+      break;
+    case 'message.delivered':
+      console.log(`Message ${event.data.messageId} delivered`);
+      break;
+  }
+
+  return NextResponse.json({ received: true });
+}
+```
+
+## Client Component
+
+```tsx
+// components/send-message-form.tsx
+'use client';
+
+import { useState } from 'react';
+import { sendMessage } from '@/app/actions/send-message';
+
+export function SendMessageForm() {
+  const [to, setTo] = useState('');
+  const [text, setText] = useState('');
+  const [status, setStatus] = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setStatus('Sending...');
+
+    const result = await sendMessage(to, text);
+    setStatus(`Message ${result.id} — ${result.status}`);
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        type="tel"
+        placeholder="+14155551234"
+        value={to}
+        onChange={e => setTo(e.target.value)}
+      />
+      <textarea
+        placeholder="Your message"
+        value={text}
+        onChange={e => setText(e.target.value)}
+      />
+      <button type="submit">Send</button>
+      {status && <p>{status}</p>}
+    </form>
+  );
+}
+```

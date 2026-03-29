@@ -1,0 +1,51 @@
+# TextBubbles API
+
+A unified REST API for sending iMessages with automatic SMS fallback. Built for businesses who want to reach customers on their preferred messaging platform.
+
+## Features
+
+- **iMessage delivery** with automatic SMS fallback
+- **Delivery confirmations** and read receipts
+- **Reply threading** — respond to specific messages
+- **Unsend & edit** — retract or update sent messages
+- **Tapback reactions** — send emoji reactions to messages
+- **Image carousels** — send up to 20 images as a gallery
+- **Message effects** — fireworks, confetti, balloons, and more
+- **Group chats** — create and manage group conversations
+- **Scheduled messages** — queue messages for future delivery
+- **Payment requests** — request Apple Cash payments via iMessage
+- **Webhooks** — real-time delivery updates and inbound messages
+
+## Quick Example
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": { "text": "Hello from TextBubbles!" }
+  }'
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_550e8400-e29b-41d4-a716-446655440000",
+    "status": "queued",
+    "to": "+14155551234",
+    "createdAt": "2026-03-28T10:00:00.000Z"
+  }
+}
+```
+
+## Developer Experience
+
+- Simple REST API with consistent JSON responses
+- Bearer token authentication
+- Idempotency key support for safe retries
+- Rate limiting with `Retry-After` headers
+- OpenAPI documentation
+- 99.9% uptime target
+- HTTPS everywhere

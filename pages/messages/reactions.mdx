@@ -1,0 +1,31 @@
+# Tapback Reactions
+
+Send emoji reactions to messages via `POST /v1/messages/:id/reactions`. Tapbacks are an iMessage-only feature.
+
+## Send a Reaction
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/reactions \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reaction": "love"
+  }'
+```
+
+## Available Reactions
+
+| Reaction | Emoji | Description |
+|----------|-------|-------------|
+| `love` | ❤️ | Heart |
+| `like` | 👍 | Thumbs up |
+| `dislike` | 👎 | Thumbs down |
+| `laugh` | 😂 | Laughing |
+| `emphasize` | ‼️ | Exclamation marks |
+| `question` | ❓ | Question mark |
+
+## Notes
+
+- Tapback reactions are **iMessage only** — they are silently ignored for SMS messages
+- You can only add one reaction per message per sender
+- To remove a reaction, send the same reaction type again (toggle behavior)

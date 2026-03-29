@@ -1,0 +1,145 @@
+# Webhook Configuration
+
+Configure a webhook endpoint to receive real-time delivery updates and inbound messages.
+
+## Set Up Your Webhook
+
+```bash
+curl -X PUT https://api.textbubbles.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": [
+      "message.queued",
+      "message.sent",
+      "message.delivered",
+      "message.failed",
+      "message.inbound"
+    ],
+    "secret": "whsec_your_signing_secret"
+  }'
+```
+
+## Get Current Configuration
+
+```bash
+curl https://api.textbubbles.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Signature Verification
+
+Every webhook request includes two headers:
+
+- **`X-Signature`** — `sha256={hmac_hex}` HMAC-SHA256 signature
+- **`X-Timestamp`** — Unix timestamp (seconds) when the webhook was sent
+
+### Verification Steps
+
+1. Extract the timestamp and signature from the headers
+2. Construct the signed payload: `{timestamp}.{raw_request_body}`
+3. Compute HMAC-SHA256 using your webhook secret
+4. Compare signatures using constant-time comparison
+5. Reject requests older than 5 minutes to prevent replay attacks
+
+### Node.js Example
+
+```javascript
+import crypto from 'crypto';
+import express from 'express';
+
+const app = express();
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+
+function verifySignature(req) {
+  const signature = req.headers['x-signature'];
+  const timestamp = req.headers['x-timestamp'];
+
+  if (!signature || !timestamp) return false;
+
+  // Reject requests older than 5 minutes
+  const age = Math.abs(Date.now() / 1000 - parseInt(timestamp));
+  if (age > 300) return false;
+
+  const signedPayload = `${timestamp}.${req.rawBody}`;
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', WEBHOOK_SECRET)
+    .update(signedPayload)
+    .digest('hex');
+
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expected)
+  );
+}
+
+app.post('/webhooks/textbubbles', (req, res) => {
+  if (!verifySignature(req)) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+
+  const { type, data } = req.body;
+
+  switch (type) {
+    case 'message.delivered':
+      console.log(`Message ${data.messageId} delivered via ${data.channel}`);
+      break;
+    case 'message.failed':
+      console.log(`Message ${data.messageId} failed: ${data.status}`);
+      break;
+    case 'message.inbound':
+      console.log(`Inbound from ${data.from}: ${data.text}`);
+      break;
+  }
+
+  res.status(200).json({ received: true });
+});
+
+app.listen(3000);
+```
+
+### Python Example
+
+```python
+import hmac
+import hashlib
+import time
+
+def verify_webhook(payload_body, signature, timestamp, secret):
+    age = abs(time.time() - int(timestamp))
+    if age > 300:
+        return False
+
+    signed_payload = f"{timestamp}.{payload_body}"
+    expected = "sha256=" + hmac.new(
+        secret.encode(), signed_payload.encode(), hashlib.sha256
+    ).hexdigest()
+
+    return hmac.compare_digest(signature, expected)
+```
+
+## Retry Policy
+
+Failed webhook deliveries are retried with exponential backoff:
+
+| Attempt | Delay |
+|---------|-------|
+| 1 | 30 seconds |
+| 2 | 5 minutes |
+| 3 | 30 minutes |
+| 4 | 2 hours |
+| 5 | 8 hours |
+| 6 | 24 hours |
+| 7 | 24 hours (final) |
+
+Your endpoint must respond with a `2xx` status code within 30 seconds.
+
+## Best Practices
+
+- **Return `200` quickly** — process events asynchronously in a background job
+- **Handle duplicates** — use the `id` field to deduplicate events
+- **Verify signatures** — always validate `X-Signature` before processing
+- **Use per-message callbacks** — for routing to different systems, use the `callbackUrl` field on individual messages

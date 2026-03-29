@@ -1,0 +1,45 @@
+# Message Effects
+
+Add visual effects to iMessage messages using the `effect` field. Effects are silently ignored if the message falls back to SMS.
+
+## Usage
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": { "text": "Congratulations!" },
+    "effect": "fireworks"
+  }'
+```
+
+## Available Effects
+
+### Screen Effects
+
+| Effect | Description |
+|--------|-------------|
+| `fireworks` | Fireworks burst across the screen |
+| `balloons` | Colorful balloons float up |
+| `confetti` | Confetti rains down |
+| `lasers` | Laser light show |
+| `spotlight` | Spotlight highlights the message |
+
+### Bubble Effects
+
+| Effect | Description |
+|--------|-------------|
+| `slam` | Message slams down onto the screen |
+| `loud` | Message appears large and shakes |
+| `gentle` | Message fades in softly |
+| `invisibleInk` | Message is hidden until swiped |
+| `echo` | Message echoes across the screen |
+| `love` | Heart animation on the message bubble |
+
+## Notes
+
+- Effects are **iMessage only** — silently ignored on SMS
+- Effects can be combined with attachments and carousels
+- The `effect` field is optional on all message-sending endpoints

@@ -1,0 +1,65 @@
+# List Messages
+
+Retrieve messages and check delivery status.
+
+## List All Messages
+
+```bash
+curl https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Get Message Status
+
+```bash
+curl https://api.textbubbles.com/v1/messages/msg_550e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_550e8400-e29b-41d4-a716-446655440000",
+    "status": "delivered",
+    "to": "+14155551234",
+    "from": "+19876543210",
+    "channel": "imessage",
+    "content": {
+      "text": "Hello from TextBubbles!"
+    },
+    "timeline": [
+      { "status": "queued", "at": "2026-03-28T10:00:00Z", "channel": null },
+      { "status": "sent", "at": "2026-03-28T10:00:01Z", "channel": "imessage" },
+      { "status": "delivered", "at": "2026-03-28T10:00:03Z", "channel": "imessage" }
+    ],
+    "fallbackTriggered": false,
+    "metadata": null,
+    "externalId": "external-guid-123",
+    "errorCode": null,
+    "errorMessage": null,
+    "createdAt": "2026-03-28T10:00:00Z"
+  },
+  "requestId": "req_abc123"
+}
+```
+
+## Message Statuses
+
+| Status | Description |
+|--------|-------------|
+| `queued` | Message accepted, waiting for delivery |
+| `scheduled` | Queued for future delivery |
+| `sent` | Sent to the carrier/provider |
+| `delivered` | Confirmed delivered to recipient |
+| `read` | Read receipt received (iMessage only) |
+| `failed` | Delivery failed |
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/messages` | List messages |
+| `GET` | `/v1/messages/:id` | Get message status |
