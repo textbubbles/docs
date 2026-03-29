@@ -1,0 +1,234 @@
+# CLI Reference
+
+The TextBubbles CLI lets you interact with the API directly from your terminal. Perfect for quick operations, testing, and scripting.
+
+## Installation
+
+```bash
+npm install -g @textbubbles/js
+```
+
+Or use npx:
+
+```bash
+npx @textbubbles/js <command>
+```
+
+## Authentication
+
+### Login
+
+Save your API key locally:
+
+```bash
+textbubbles login
+# Enter your API key when prompted
+```
+
+Or set via environment variable:
+
+```bash
+export TEXTBUBBLES_API_KEY=tb_your_api_key
+```
+
+### Check Auth Status
+
+```bash
+textbubbles whoami
+```
+
+### Logout
+
+```bash
+textbubbles logout
+```
+
+## Messages
+
+### Send a Message
+
+```bash
+# Basic message
+textbubbles send "+14155551234" "Hello from CLI!"
+
+# With effect
+textbubbles send "+14155551234" "Congrats!" --effect confetti
+
+# With media
+textbubbles send "+14155551234" "Check this out" --media https://example.com/image.jpg
+```
+
+### Send Carousel
+
+```bash
+textbubbles send:carousel "+14155551234" \
+  https://example.com/img1.jpg \
+  https://example.com/img2.jpg \
+  https://example.com/img3.jpg
+```
+
+### Schedule a Message
+
+```bash
+textbubbles send:schedule "+14155551234" "Good morning!" \
+  --at "2026-03-29T09:00:00Z"
+```
+
+### List Messages
+
+```bash
+# All messages
+textbubbles messages list
+
+# Filter by recipient
+textbubbles messages list --to "+14155551234"
+
+# Limit results
+textbubbles messages list --limit 10
+
+# JSON output
+textbubbles messages list --json
+```
+
+### Get Message Details
+
+```bash
+textbubbles messages get msg_abc123
+```
+
+### Cancel Scheduled Message
+
+```bash
+textbubbles messages cancel msg_abc123
+```
+
+## Contacts
+
+### List Contacts
+
+```bash
+# All contacts
+textbubbles contacts list
+
+# Filter by tag
+textbubbles contacts list --tag vip
+
+# Search by name
+textbubbles contacts list --search "Jane"
+```
+
+### Create Contact
+
+```bash
+textbubbles contacts create \
+  --phone "+14155551234" \
+  --name "Jane Doe" \
+  --email "jane@example.com" \
+  --tags vip,customer
+```
+
+### Get Contact
+
+```bash
+textbubbles contacts get contact_abc123
+```
+
+### Delete Contact
+
+```bash
+textbubbles contacts delete contact_abc123
+```
+
+## Capabilities
+
+### Check iMessage Support
+
+```bash
+textbubbles check "+14155551234"
+```
+
+Output:
+```
++14155551234: iMessage ✓
+```
+
+## Webhooks
+
+### Get Current Config
+
+```bash
+textbubbles webhooks get
+```
+
+### Set Webhook URL
+
+```bash
+textbubbles webhooks set https://example.com/webhooks/textbubbles \
+  --secret whsec_your_secret \
+  --events message.received,message.delivered
+```
+
+## Payments
+
+### Request Payment
+
+```bash
+textbubbles pay:request "+14155551234" 25.00 --memo "For lunch"
+```
+
+### List Payment Requests
+
+```bash
+textbubbles pay:list
+```
+
+### Cancel Payment Request
+
+```bash
+textbubbles pay:cancel pay_abc123
+```
+
+## Global Options
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output as JSON |
+| `--api-key <key>` | Override API key |
+| `--base-url <url>` | Override API base URL |
+| `--help` | Show help |
+| `--version` | Show version |
+
+## Configuration File
+
+The CLI stores configuration in `~/.textbubbles/config.json`:
+
+```json
+{
+  "apiKey": "tb_your_api_key",
+  "baseUrl": "https://api.textbubbles.com"
+}
+```
+
+## Scripting Examples
+
+### Send to Multiple Recipients
+
+```bash
+for phone in "+14155551234" "+14155555678" "+14155559999"; do
+  textbubbles send "$phone" "Hello!"
+done
+```
+
+### Export Messages to JSON
+
+```bash
+textbubbles messages list --json > messages.json
+```
+
+### Check Multiple Numbers
+
+```bash
+cat numbers.txt | while read phone; do
+  textbubbles check "$phone"
+done
+```
