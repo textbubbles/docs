@@ -8,5 +8,6 @@ export default {
   "payments": "Payments",
   "webhooks": "Webhooks",
   "sdk": "SDK",
-  "api-reference": "API Reference"
+  "api-reference": "API Reference",
+  "admin": "Admin Guide"
 }
