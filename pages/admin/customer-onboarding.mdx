@@ -2,10 +2,16 @@
 
 This guide walks through the complete process of setting up a new TextBubbles customer, from account creation to generating their API key.
 
+## Architecture Overview
+
+TextBubbles uses a **1 customer = 1 BlueBubbles instance** model. Each customer is assigned to a dedicated BlueBubbles instance, which handles all messaging (iMessage, SMS, MMS, RCS) natively — no external providers like Twilio or Telnyx are used.
+
+All data is fully segregated by customer. API keys are associated with a customer, and every API call is scoped to that customer's data, webhooks, and authorized addresses.
+
 ## Prerequisites
 
 - Admin API key (stored in `.env` as `ADMIN_API_KEY`)
-- A BlueBubbles instance with available capacity (or shared default instance)
+- A BlueBubbles instance to assign to the customer
 
 ## Quick Start
 
@@ -36,9 +42,9 @@ curl -X POST https://api.textbubbles.com/v1/admin/customers \
 }
 ```
 
-### 2. Assign Phone Number
+### 2. Assign Authorized Address
 
-Each customer needs at least one phone number to send messages from. For the MVP/shared infrastructure, all customers use the same default number.
+Each customer needs at least one authorized phone number (address) to send messages from. The `from` parameter on send requests must be one of these authorized addresses, or the API returns `403 ADDRESS_NOT_AUTHORIZED`.
 
 ```bash
 curl -X POST https://api.textbubbles.com/v1/admin/customers/{customerId}/numbers \
@@ -93,7 +99,7 @@ curl -X POST https://api.textbubbles.com/v1/admin/keys \
 }
 ```
 
-**⚠️ Important:** Save the `key` value immediately. It is only returned once and cannot be retrieved later.
+**⚠️ Important:** Save the `key` value immediately. API keys are **hashed with bcrypt** before storage. The plaintext key is returned only once and cannot be retrieved later. If lost, generate a new key and revoke the old one.
 
 ---
 
@@ -126,9 +132,9 @@ curl -X POST https://api.textbubbles.com/v1/admin/keys \
 
 ---
 
-## Multi-Tenant Architecture (Future)
+## Multi-Tenant Architecture
 
-TextBubbles supports dedicated phone numbers via separate BlueBubbles instances:
+Each customer is assigned to a dedicated BlueBubbles instance (1 customer = 1 instance). This provides full data isolation and a dedicated sender identity:
 
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌─────────────────────┐
@@ -169,24 +175,19 @@ curl -X POST https://api.textbubbles.com/v1/admin/instances \
 
 ## Scaling Strategy
 
-### Phase 1: Shared Infrastructure (Current)
-- Single BlueBubbles instance
-- All customers share one sender number
-- Best for: MVP, low volume, internal testing
-
-### Phase 2: Fast User Switching
+### Phase 1: Fast User Switching
 - Multiple macOS user accounts
 - Each user = separate iCloud/BlueBubbles
 - Up to 5 concurrent users per Mac Mini
 - Requires: macOS user management, automated login
 
-### Phase 3: Mac VMs
+### Phase 2: Mac VMs
 - UTM/Parallels virtualization
 - 2-4 macOS VMs per Apple Silicon Mac
 - Each VM runs separate BlueBubbles
 - Requires: VM orchestration, resource management
 
-### Phase 4: Dedicated Hardware
+### Phase 3: Dedicated Hardware
 - Mac Mini cluster (Mac Mini M4 recommended)
 - One customer per device
 - Highest reliability and isolation
@@ -196,16 +197,17 @@ curl -X POST https://api.textbubbles.com/v1/admin/instances \
 
 ## Troubleshooting
 
-### "NUMBER_NOT_OWNED" Error
-Customer is trying to send from a number not assigned to them.
-- Check assigned numbers: `GET /v1/admin/customers/:id`
-- Assign the correct number or use their default
+### "ADDRESS_NOT_AUTHORIZED" Error (403)
+Customer is trying to send from an address not in their authorized list.
+- Check assigned addresses: `GET /v1/admin/customers/:id`
+- Assign the correct address or use their default
 
-### "NO_DEFAULT_NUMBER" Error
-Customer has no phone numbers assigned.
-- Assign at least one number with `POST /v1/admin/customers/:id/numbers`
+### "NO_DEFAULT_ADDRESS" Error (400)
+Customer has no authorized addresses configured.
+- Assign at least one address with `POST /v1/admin/customers/:id/numbers`
 
 ### API Key Not Working
 - Verify the key hasn't been revoked: `GET /v1/admin/keys`
 - Check the key prefix is `tb_`
 - Ensure proper `Authorization: Bearer` header format
+- Remember: keys are hashed with bcrypt — you cannot look up the plaintext value

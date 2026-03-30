@@ -46,6 +46,15 @@ curl https://api.textbubbles.com/v1/messages/msg_550e8400-e29b-41d4-a716-4466554
 }
 ```
 
+## Inbound Messages
+
+Inbound messages from contacts are stored in the database with status `received` and are visible when listing messages. Filter for inbound messages using the `status` query parameter:
+
+```bash
+curl "https://api.textbubbles.com/v1/messages?status=received" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
 ## Message Statuses
 
 | Status | Description |
@@ -55,11 +64,13 @@ curl https://api.textbubbles.com/v1/messages/msg_550e8400-e29b-41d4-a716-4466554
 | `sent` | Sent to the carrier/provider |
 | `delivered` | Confirmed delivered to recipient |
 | `read` | Read receipt received (iMessage only) |
+| `received` | Inbound message from a contact |
 | `failed` | Delivery failed |
 
 ## Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/v1/messages` | List messages |
+| `GET` | `/v1/messages` | List messages (including inbound) |
 | `GET` | `/v1/messages/:id` | Get message status |
+| `DELETE` | `/v1/messages/:id` | Soft-delete a message |

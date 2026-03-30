@@ -9,14 +9,27 @@ curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/reactions \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "reaction": "love"
+    "type": "love"
   }'
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "messageId": "msg_abc123",
+    "reaction": "love"
+  },
+  "requestId": "req_xyz"
+}
 ```
 
 ## Available Reactions
 
-| Reaction | Emoji | Description |
-|----------|-------|-------------|
+| Type | Emoji | Description |
+|------|-------|-------------|
 | `love` | ❤️ | Heart |
 | `like` | 👍 | Thumbs up |
 | `dislike` | 👎 | Thumbs down |
@@ -24,8 +37,37 @@ curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/reactions \
 | `emphasize` | ‼️ | Exclamation marks |
 | `question` | ❓ | Question mark |
 
+## Reaction Webhooks
+
+When a reaction is received on an inbound message, you'll get a structured webhook payload:
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "reaction.love",
+  "timestamp": "2026-03-28T10:00:00.000Z",
+  "data": {
+    "reaction": {
+      "type": "love",
+      "targetMessageId": "msg_xyz789",
+      "content": "Loved "Hello!""
+    },
+    "from": "+14155551234",
+    "channel": "imessage"
+  }
+}
+```
+
+The `reaction` object contains:
+
+| Field | Description |
+|-------|-------------|
+| `reaction.type` | The reaction type (love, like, dislike, laugh, emphasize, question) |
+| `reaction.targetMessageId` | The message ID the reaction was applied to |
+| `reaction.content` | Human-readable description of the reaction |
+
 ## Notes
 
-- Tapback reactions are **iMessage only** — they are silently ignored for SMS messages
+- Tapback reactions are **iMessage only** — returns `400 CHANNEL_NOT_SUPPORTED` for SMS messages
 - You can only add one reaction per message per sender
 - To remove a reaction, send the same reaction type again (toggle behavior)

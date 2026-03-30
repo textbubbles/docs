@@ -7,9 +7,11 @@ The TextBubbles SDK includes an **Agent Skill** that makes AI coding assistants 
 The skill provides:
 
 - Complete API reference for all SDK methods
-- Parameter types and return values  
+- Parameter types and return values
 - Code examples for common use cases
-- Webhook event handling patterns
+- Customer-scoped authentication and address authorization
+- Webhook event handling patterns (including wildcard subscriptions and structured reaction events)
+- Inbound message handling
 - Next.js integration examples
 - CLI command reference
 
@@ -67,7 +69,11 @@ Once installed, your AI assistant will:
 After installing the skill, try asking your AI assistant:
 
 - "Send a message with confetti effect to +14155551234"
-- "Set up a webhook handler for message.received events in Next.js"
+- "Send a message from a specific authorized address"
+- "Set up a webhook handler for message.inbound events in Next.js"
+- "Subscribe to all webhook events using wildcard"
+- "List all inbound messages"
+- "Handle structured reaction webhooks"
 - "List all scheduled messages using the CLI"
 - "Create a bulk contact import from a CSV file"
 - "Check if a phone number supports iMessage"
@@ -81,6 +87,8 @@ The skill covers:
 | **SDK Methods** | All client methods with parameters and return types |
 | **CLI Commands** | Full command reference with examples |
 | **Types** | TypeScript types for requests and responses |
-| **Webhooks** | Event types and signature verification |
+| **Authentication** | Customer-scoped API keys and address authorization |
+| **Webhooks** | Event types, wildcard subscriptions, structured reactions, and signature verification |
+| **Inbound Messages** | Receiving and listing inbound messages |
 | **Next.js** | App Router and Pages Router integration |
 | **Error Handling** | Error classes and retry strategies |
