@@ -15,7 +15,8 @@
 
 # ---------- production ----------
 FROM nginx:alpine
-COPY out/ /usr/share/nginx/html
+COPY --chmod=755 out/ /usr/share/nginx/html
+RUN chmod -R 755 /usr/share/nginx/html
 COPY <<'EOF' /etc/nginx/conf.d/default.conf
 server {
     listen 3002;
