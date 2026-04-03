@@ -21,9 +21,9 @@ TEXTBUBBLES_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxx
 // app/actions/send-message.ts
 'use server';
 
-import { TextBubbles } from '@textbubbles/js';
+import { TextBubblesClient } from '@textbubbles/js';
 
-const tb = new TextBubbles();
+const tb = new TextBubblesClient();
 
 export async function sendMessage(to: string, text: string) {
   const message = await tb.messages.send({
@@ -40,9 +40,9 @@ export async function sendMessage(to: string, text: string) {
 ```typescript
 // app/api/send/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { TextBubbles } from '@textbubbles/js';
+import { TextBubblesClient } from '@textbubbles/js';
 
-const tb = new TextBubbles();
+const tb = new TextBubblesClient();
 
 export async function POST(request: NextRequest) {
   const { to, text } = await request.json();

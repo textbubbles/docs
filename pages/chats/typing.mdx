@@ -6,8 +6,14 @@ Send typing indicators to show the recipient that you're composing a message.
 
 ```bash
 curl -X POST https://api.textbubbles.com/v1/chats/CHAT_ID/typing \
-  -H "Authorization: Bearer YOUR_API_KEY"
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "start"
+  }'
 ```
+
+Use `"status": "stop"` to explicitly cancel the typing indicator.
 
 This displays the familiar "..." typing bubble in the recipient's Messages app.
 

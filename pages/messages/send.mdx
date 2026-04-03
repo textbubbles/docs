@@ -16,7 +16,24 @@ curl -X POST https://api.textbubbles.com/v1/messages \
   }'
 ```
 
-Phone numbers must be in E.164 format (e.g., `+14155551234`). The `content.text` field supports 1-10,000 characters.
+The `to` field accepts phone numbers in E.164 format (e.g., `+14155551234`) or iMessage email addresses (e.g., `user@example.com`).
+
+## Sender Address (`from`)
+
+By default, messages are sent from your customer's default authorized address. You can specify a different authorized address with the `from` field:
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "from": "+19876543210",
+    "content": { "text": "Hello from my other number!" }
+  }'
+```
+
+The `from` address must be in your customer's authorized address list. Using an unauthorized address returns `403 ADDRESS_NOT_AUTHORIZED`. See [Authentication](/authentication#address-authorization) for details.
 
 ## With Effects (iMessage Only)
 
@@ -122,9 +139,13 @@ curl -X PUT https://api.textbubbles.com/v1/messages/msg_abc123 \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "content": { "text": "Updated message text" }
+    "text": "Updated message text",
+    "backwardsCompatibilityMessage": "* Updated message text"
   }'
 ```
+
+- `text` — the new message text (required)
+- `backwardsCompatibilityMessage` — fallback text shown on older devices that don't support message editing (optional)
 
 ## Idempotency
 
@@ -144,8 +165,9 @@ If a message with the same key already exists, the API returns `200 OK` with the
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `to` | string | Yes | Recipient phone number (E.164 format) |
-| `content.text` | string | Yes | Message text (1-10,000 chars) |
+| `to` | string | Yes | Recipient phone number (E.164) or iMessage email address |
+| `from` | string | No | Sender address (must be authorized for your customer; uses default if omitted) |
+| `content.text` | string | No | Message text (up to 10,000 chars). Optional if `content.mediaUrl` is provided |
 | `content.mediaUrl` | string | No | Media URL for SMS/MMS |
 | `routing.preference` | string[] | No | Channel priority (default: `["imessage", "sms"]`) |
 | `routing.fallback` | boolean | No | Enable fallback (default: `true`) |

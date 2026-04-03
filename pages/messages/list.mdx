@@ -46,20 +46,27 @@ curl https://api.textbubbles.com/v1/messages/msg_550e8400-e29b-41d4-a716-4466554
 }
 ```
 
+## Inbound Messages
+
+Inbound messages from contacts are delivered via the `message.inbound` webhook event. To receive them, subscribe to `message.inbound` in your [webhook configuration](/webhooks/events).
+
 ## Message Statuses
 
 | Status | Description |
 |--------|-------------|
 | `queued` | Message accepted, waiting for delivery |
+| `pending` | Being processed for delivery |
 | `scheduled` | Queued for future delivery |
 | `sent` | Sent to the carrier/provider |
 | `delivered` | Confirmed delivered to recipient |
 | `read` | Read receipt received (iMessage only) |
 | `failed` | Delivery failed |
+| `unsent` | Message was unsent/retracted |
 
 ## Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/v1/messages` | List messages |
+| `GET` | `/v1/messages` | List messages (including inbound) |
 | `GET` | `/v1/messages/:id` | Get message status |
+| `DELETE` | `/v1/messages/:id` | Soft-delete a message |

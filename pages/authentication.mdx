@@ -1,6 +1,6 @@
 # Authentication
 
-All TextBubbles API requests require a Bearer token in the `Authorization` header.
+All TextBubbles API requests require a Bearer token in the `Authorization` header. Each API key is associated with a specific customer account, providing full data segregation between customers.
 
 ## Bearer Token
 
@@ -15,7 +15,39 @@ curl https://api.textbubbles.com/v1/messages \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-## Error Response
+## Customer-Scoped API Keys
+
+Every API key is tied to a customer account. When you authenticate, the API automatically scopes all operations to your customer:
+
+- **Messages** — you can only see and send messages belonging to your customer
+- **Contacts** — contacts are isolated per customer
+- **Webhooks** — each customer has their own webhook configuration
+- **Addresses** — you can only send from phone numbers authorized for your customer
+
+If an API key has no customer association, all endpoints return `403 Forbidden`.
+
+## Address Authorization
+
+When sending messages, the `from` parameter must be a phone number authorized for your customer account. If omitted, the default authorized address is used. Sending from an unauthorized address returns a `403`:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ADDRESS_NOT_AUTHORIZED",
+    "message": "The 'from' address is not authorized for this customer"
+  },
+  "requestId": "req_xyz"
+}
+```
+
+## API Key Security
+
+API keys are **hashed with bcrypt** before storage. The plaintext key is returned **only once** at creation time and cannot be retrieved later. If you lose your key, contact your account administrator to generate a new one.
+
+API keys use the prefix `tb_` followed by a unique identifier. Store your API key securely and never expose it in client-side code.
+
+## Error Responses
 
 Requests without a valid token receive a `401 Unauthorized` response:
 
@@ -30,9 +62,18 @@ Requests without a valid token receive a `401 Unauthorized` response:
 }
 ```
 
-## API Key Format
+Requests with a valid key but no customer association receive `403 Forbidden`:
 
-API keys use the prefix `tb_` followed by a unique identifier. Store your API key securely and never expose it in client-side code.
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "API key has no associated customer"
+  },
+  "requestId": "req_xyz"
+}
+```
 
 ## Rate Limiting
 
@@ -42,7 +83,7 @@ Each API key has its own rate limits. When exceeded, you'll receive a `429 Too M
 {
   "success": false,
   "error": {
-    "code": "RATE_LIMITED",
+    "code": "RATE_LIMIT_EXCEEDED",
     "message": "Too many requests. Please retry after 60 seconds."
   },
   "requestId": "req_xyz"
@@ -82,6 +123,6 @@ Every API response includes a `requestId` field. You can also pass your own via 
 ## Best Practices
 
 - Store API keys in environment variables, never in source code
+- Save your API key immediately upon creation — it cannot be retrieved later
 - Use different API keys for development and production
-- Rotate keys periodically via the admin API
-- Monitor usage via `GET /v1/admin/usage`
+- Contact your account administrator to rotate keys periodically
