@@ -1,6 +1,6 @@
 # Send Messages
 
-Send iMessages with automatic SMS fallback via `POST /v1/messages`. All messaging (iMessage, SMS, MMS, RCS) is handled natively through BlueBubbles — no external providers required.
+Send iMessages with automatic SMS fallback via `POST /v1/messages`.
 
 ## Basic Message
 
@@ -105,7 +105,7 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 
 ## Channel Routing
 
-By default, messages try iMessage first and fall back to SMS. Both channels are handled natively by BlueBubbles. Customize with the `routing` field:
+By default, messages try iMessage first and fall back to SMS. Customize with the `routing` field:
 
 ```json
 {

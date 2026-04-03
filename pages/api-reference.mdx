@@ -67,32 +67,6 @@ Complete list of all TextBubbles API endpoints. Base URL: `https://api.textbubbl
 | `GET` | `/v1/webhooks` | [Get webhook config](/webhooks/setup) |
 | `PUT` | `/v1/webhooks` | [Set webhook URL & events](/webhooks/setup) |
 
-## Contact Sharing (Profile) — DEPRECATED
-
-All profile endpoints return `410 Gone`. Profiles are being migrated to a new model.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/v1/profile/state` | ~~Get contact sharing profile~~ (deprecated) |
-| `POST` | `/v1/profile` | ~~Set contact sharing profile~~ (deprecated) |
-| `DELETE` | `/v1/profile` | ~~Remove contact sharing profile~~ (deprecated) |
-
-## Admin
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/v1/admin/keys` | Create API key |
-| `GET` | `/v1/admin/keys` | List API keys |
-| `DELETE` | `/v1/admin/keys/:id` | Revoke API key |
-| `GET` | `/v1/admin/usage` | Get usage stats |
-
-## System
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Health check |
-| `GET` | `/docs` | API documentation (Scalar UI) |
-
 ## Error Codes
 
 | Code | HTTP Status | Description |

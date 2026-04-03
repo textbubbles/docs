@@ -43,7 +43,7 @@ When sending messages, the `from` parameter must be a phone number authorized fo
 
 ## API Key Security
 
-API keys are **hashed with bcrypt** before storage. The plaintext key is returned **only once** at creation time and cannot be retrieved later. If you lose your key, you must generate a new one via the admin API.
+API keys are **hashed with bcrypt** before storage. The plaintext key is returned **only once** at creation time and cannot be retrieved later. If you lose your key, contact your account administrator to generate a new one.
 
 API keys use the prefix `tb_` followed by a unique identifier. Store your API key securely and never expose it in client-side code.
 
@@ -125,5 +125,4 @@ Every API response includes a `requestId` field. You can also pass your own via 
 - Store API keys in environment variables, never in source code
 - Save your API key immediately upon creation — it cannot be retrieved later
 - Use different API keys for development and production
-- Rotate keys periodically via the admin API
-- Monitor usage via `GET /v1/admin/usage`
+- Contact your account administrator to rotate keys periodically
