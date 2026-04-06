@@ -1,6 +1,6 @@
 # Webhook Configuration
 
-Configure a webhook endpoint to receive real-time delivery updates and inbound messages.
+Configure a webhook endpoint to receive real-time delivery updates and inbound messages. Each customer has their own isolated webhook configuration — your webhooks only receive events for your customer's messages.
 
 ## Set Up Your Webhook
 
@@ -21,12 +21,31 @@ curl -X PUT https://api.textbubbles.com/v1/webhooks \
   }'
 ```
 
+## Wildcard Events
+
+Subscribe to all events at once using the wildcard `*`:
+
+```bash
+curl -X PUT https://api.textbubbles.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": ["*"],
+    "secret": "whsec_your_signing_secret"
+  }'
+```
+
+This automatically subscribes to all current and future event types.
+
 ## Get Current Configuration
 
 ```bash
 curl https://api.textbubbles.com/v1/webhooks \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
+
+Returns `null` if no webhook is configured for your customer.
 
 ## Signature Verification
 

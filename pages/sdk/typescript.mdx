@@ -5,10 +5,10 @@ The `@textbubbles/js` SDK is written in TypeScript and ships with full type defi
 ## Type-Safe Messages
 
 ```typescript
-import { TextBubbles } from '@textbubbles/js';
+import { TextBubblesClient } from '@textbubbles/js';
 import type { SendMessageOptions, Message, MessageEffect } from '@textbubbles/js';
 
-const tb = new TextBubbles();
+const tb = new TextBubblesClient();
 
 const options: SendMessageOptions = {
   to: '+14155551234',
@@ -53,9 +53,9 @@ import type {
 ## Error Handling
 
 ```typescript
-import { TextBubbles, TextBubblesError } from '@textbubbles/js';
+import { TextBubblesClient, TextBubblesError } from '@textbubbles/js';
 
-const tb = new TextBubbles();
+const tb = new TextBubblesClient();
 
 try {
   await tb.messages.send({

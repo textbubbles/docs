@@ -13,6 +13,7 @@ Complete list of all TextBubbles API endpoints. Base URL: `https://api.textbubbl
 | `PUT` | `/v1/messages/:id` | [Edit a message](/messages/send#edit-a-message) |
 | `POST` | `/v1/messages/:id/reactions` | [Send tapback reaction](/messages/reactions) |
 | `POST` | `/v1/messages/carousel` | [Send image carousel](/messages/carousel) |
+| `DELETE` | `/v1/messages/:id` | Soft-delete a message |
 | `GET` | `/v1/messages/scheduled` | [List scheduled messages](/messages/scheduled) |
 | `DELETE` | `/v1/messages/:id/schedule` | [Cancel scheduled message](/messages/scheduled#cancel-a-scheduled-message) |
 
@@ -26,6 +27,8 @@ Complete list of all TextBubbles API endpoints. Base URL: `https://api.textbubbl
 | `POST` | `/v1/chats/:chatId/participants` | [Add participant](/chats/groups#add-a-participant) |
 | `DELETE` | `/v1/chats/:chatId/participants/:id` | [Remove participant](/chats/groups#remove-a-participant) |
 | `POST` | `/v1/chats/:chatId/leave` | [Leave group](/chats/groups#leave-a-group) |
+| `POST` | `/v1/chats/:chatId/read` | Mark chat as read |
+| `POST` | `/v1/chats/:chatId/unread` | Mark chat as unread (macOS 13+) |
 | `POST` | `/v1/chats/:chatId/typing` | [Send typing indicator](/chats/typing) |
 
 ## Capabilities
@@ -64,45 +67,29 @@ Complete list of all TextBubbles API endpoints. Base URL: `https://api.textbubbl
 | `GET` | `/v1/webhooks` | [Get webhook config](/webhooks/setup) |
 | `PUT` | `/v1/webhooks` | [Set webhook URL & events](/webhooks/setup) |
 
-## Contact Sharing (Profile)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/v1/profile/state` | Get contact sharing profile |
-| `POST` | `/v1/profile` | Set contact sharing profile |
-| `DELETE` | `/v1/profile` | Remove contact sharing profile |
-
-## Admin
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/v1/admin/keys` | Create API key |
-| `GET` | `/v1/admin/keys` | List API keys |
-| `DELETE` | `/v1/admin/keys/:id` | Revoke API key |
-| `GET` | `/v1/admin/usage` | Get usage stats |
-
-## System
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Health check |
-| `GET` | `/docs` | API documentation (Scalar UI) |
-
 ## Error Codes
 
 | Code | HTTP Status | Description |
 |------|-------------|-------------|
 | `UNAUTHORIZED` | 401 | Missing or invalid Bearer token |
+| `FORBIDDEN` | 403 | API key has no associated customer |
+| `ADDRESS_NOT_AUTHORIZED` | 403 | Sender address not authorized for this customer |
+| `NO_DEFAULT_ADDRESS` | 400 | No authorized address configured for customer |
 | `VALIDATION_ERROR` | 400 | Request body failed validation |
 | `INVALID_PHONE_NUMBER` | 400 | Phone number not in E.164 format |
 | `NOT_FOUND` | 404 | Resource not found |
 | `REPLY_NOT_FOUND` | 404 | Reply target message not found |
 | `CHANNEL_NOT_SUPPORTED` | 400 | Operation not supported on channel |
 | `NO_CHANNEL_AVAILABLE` | 400 | Recipient not reachable |
-| `SMS_NOT_CONFIGURED` | 400 | SMS providers not configured |
+| `INVALID_STATUS` | 400 | Operation not valid for current message status |
+| `MISSING_EXTERNAL_ID` | 400 | Message has no external provider ID |
 | `ALREADY_UNSENT` | 409 | Message already unsent |
 | `ALREADY_DELETED` | 409 | Message already deleted |
+| `NOT_SCHEDULED` | 400 | Message is not in scheduled status |
+| `INVALID_SCHEDULED_AT` | 400 | Invalid ISO 8601 datetime format |
+| `SCHEDULED_IN_PAST` | 400 | Scheduled time is in the past |
+| `SCHEDULED_TOO_FAR` | 400 | Scheduled time is more than 30 days away |
+| `DEPRECATED` | 410 | Endpoint has been deprecated |
 | `RATE_LIMITED` | 429 | Too many requests |
-| `IMESSAGE_SEND_FAILED` | 500 | iMessage provider error |
-| `SMS_SEND_FAILED` | 500 | SMS provider error |
+| `IMESSAGE_SEND_FAILED` | 500 | iMessage delivery error |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |

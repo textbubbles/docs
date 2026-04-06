@@ -81,6 +81,33 @@ Every webhook event follows this structure:
 }
 ```
 
+## Reaction Events
+
+Reaction webhooks include structured data about the reaction:
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "message.reaction",
+  "timestamp": "2026-03-28T10:00:00.000Z",
+  "data": {
+    "reaction": {
+      "type": "love",
+      "targetMessageId": "msg_xyz789",
+      "content": "Loved \"Hello!\""
+    },
+    "from": "+14155551234",
+    "channel": "imessage"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `reaction.type` | Reaction type: love, like, dislike, laugh, emphasize, question |
+| `reaction.targetMessageId` | The message the reaction was applied to |
+| `reaction.content` | Human-readable description |
+
 ## Subscribing to Events
 
 Select which events to receive when configuring your webhook:
@@ -98,5 +125,17 @@ curl -X PUT https://api.textbubbles.com/v1/webhooks \
       "message.inbound",
       "payment.request.paid"
     ]
+  }'
+```
+
+To subscribe to **all events**, use the wildcard:
+
+```bash
+curl -X PUT https://api.textbubbles.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": ["*"]
   }'
 ```
