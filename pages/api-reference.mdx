@@ -37,6 +37,60 @@ Complete list of all TextBubbles API endpoints. Base URL: `https://api.textbubbl
 |--------|------|-------------|
 | `GET` | `/v1/capabilities/:phone` | Check iMessage/SMS/FaceTime support |
 
+## Numbers
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/numbers` | [List available sender addresses](#get-v1numbers) |
+
+### GET /v1/numbers
+
+List all phone numbers and email addresses available as valid `from` addresses for your account.
+
+**Authentication:** Requires Bearer token (`Authorization: Bearer tb_xxxxx`)
+
+#### Example Request
+
+```bash
+curl -H "Authorization: Bearer tb_xxxxx" https://api.textbubbles.com/v1/numbers
+```
+
+#### Example Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "phoneNumber": "+14155551234",
+      "email": "user@icloud.com",
+      "instanceName": "TextBubbles Service 001",
+      "isDefault": true,
+      "healthStatus": "healthy"
+    },
+    {
+      "phoneNumber": "+19876543210",
+      "email": null,
+      "instanceName": "TextBubbles Service 002",
+      "isDefault": false,
+      "healthStatus": "healthy"
+    }
+  ]
+}
+```
+
+#### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `phoneNumber` | string | E.164 phone number |
+| `email` | string \| null | iMessage email or null |
+| `instanceName` | string | Friendly name of the instance |
+| `isDefault` | boolean | Whether this is the default sender when no `from` is specified |
+| `healthStatus` | string | One of `healthy`, `degraded`, `unhealthy`, or `unknown` |
+
+> **Note:** Use the `phoneNumber` or `email` values as the `from` field when sending messages to control which sender address is used.
+
 ## Contacts
 
 | Method | Path | Description |
