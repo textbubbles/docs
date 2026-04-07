@@ -67,6 +67,63 @@ Complete list of all TextBubbles API endpoints. Base URL: `https://api.textbubbl
 | `GET` | `/v1/webhooks` | [Get webhook config](/webhooks/setup) |
 | `PUT` | `/v1/webhooks` | [Set webhook URL & events](/webhooks/setup) |
 
+## Health Check
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Service health check |
+
+The health check endpoint requires no authentication and is not rate-limited. It returns the overall service status along with individual dependency checks.
+
+### Response
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-04-06T12:00:00.000Z",
+  "checks": {
+    "database": { "status": "ok" },
+    "redis": { "status": "ok" },
+    "bluebubbles": { "status": "ok" },
+    "sms": {
+      "telnyx": { "status": "configured" },
+      "twilio": { "status": "not_configured" },
+      "available": true
+    },
+    "whatsapp": {
+      "status": "not_enabled",
+      "experimental": true
+    }
+  }
+}
+```
+
+The top-level `status` is `"ok"` when the database and Redis are both reachable, or `"degraded"` if either is down. BlueBubbles, SMS, and WhatsApp statuses are reported for visibility but do not affect the top-level status.
+
+### Instance Health Status
+
+Each BlueBubbles instance is independently monitored every 2 minutes. Instance health is stored as one of four values:
+
+| Status | Meaning |
+|--------|---------|
+| `healthy` | Instance is reachable and fully functional |
+| `degraded` | Instance is reachable but has issues (see warnings below) |
+| `unhealthy` | Instance is unreachable or the health check failed |
+| `unknown` | Instance has not been checked yet |
+
+### Instance Health Warnings
+
+When an instance has `degraded` status, the response includes an array of warning strings describing what is wrong. The following conditions trigger warnings:
+
+| Condition | Warning | Impact |
+|-----------|---------|--------|
+| Private API disabled | "Private API is disabled" | Typing indicators, reactions, read receipts, and FaceTime events will not work |
+| Private API helper disconnected | "Private API helper is not connected" | Same features as above are unavailable; restart the helper from the BlueBubbles GUI to resolve |
+| No iMessage account detected | "No iMessage account detected" | iMessage and FaceTime will not work on this instance |
+| No iCloud account detected | "No iCloud account detected" | Sign in to iCloud on the Mac hosting this instance to resolve |
+
+An instance can have multiple warnings at the same time. Warnings are cleared automatically when the next health check finds the condition resolved.
+
 ## Error Codes
 
 | Code | HTTP Status | Description |

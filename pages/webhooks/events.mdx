@@ -65,6 +65,54 @@ Every webhook event follows this structure:
 | `facetime.incoming` | Incoming FaceTime call detected |
 | `facetime.status_changed` | Call status update (answered, disconnected, etc.) |
 
+### `facetime.incoming`
+
+Fired when an incoming FaceTime call is detected on an instance.
+
+```json
+{
+  "type": "facetime.incoming",
+  "eventId": "ft-event-uuid",
+  "callUuid": "call-uuid-or-null",
+  "caller": "+14155551234",
+  "to": "+19876543210",
+  "isAudio": false,
+  "isVideo": true,
+  "facetimeLink": "facetime://%2B14155551234",
+  "timestamp": 1711584000000
+}
+```
+
+### `facetime.status_changed`
+
+Fired when the status of a FaceTime call changes (e.g., the call is answered or disconnected).
+
+```json
+{
+  "type": "facetime.status_changed",
+  "eventId": "ft-event-uuid",
+  "callUuid": "call-uuid-123",
+  "address": "+14155551234",
+  "to": "+19876543210",
+  "status": "answered",
+  "isAudio": false,
+  "isVideo": true,
+  "isOutgoing": false,
+  "facetimeLink": "facetime://%2B14155551234"
+}
+```
+
+### FaceTime field reference
+
+| Field | Description |
+|-------|-------------|
+| `to` | The phone number or email of the receiving BlueBubbles instance |
+| `isAudio` / `isVideo` | Distinguish between FaceTime Audio and FaceTime Video calls. A FaceTime Audio call has `isAudio: true, isVideo: false`; a FaceTime Video call has `isAudio: false, isVideo: true` |
+| `facetimeLink` | A URL-scheme link that can be used to call back the caller. Uses `facetime://` for video calls and `facetime-audio://` for audio-only calls |
+| `status` | Current call status. Possible values: `"answered"`, `"disconnected"`, `"missed"`, `"rejected"`, `"failed"` |
+| `callUuid` | Unique identifier for the call session. May be `null` for the initial `facetime.incoming` event if the call has not yet been assigned an ID |
+| `isOutgoing` | Whether the call was initiated by the instance (`true`) or received (`false`). Present on `facetime.status_changed` events |
+
 ## Inbound Message Payload
 
 ```json
@@ -75,11 +123,29 @@ Every webhook event follows this structure:
   "data": {
     "messageId": "msg_xyz789",
     "from": "+14155551234",
-    "text": "Hello!",
-    "channel": "imessage"
+    "text": "Check out this photo",
+    "channel": "imessage",
+    "attachments": [
+      {
+        "guid": "att_550e8400-e29b-41d4-a716-446655440000",
+        "mimeType": "image/jpeg",
+        "filename": "photo.jpg",
+        "totalBytes": 248000,
+        "downloadUrl": "https://api.textbubbles.com/v1/attachments/att_550e8400/download"
+      }
+    ]
   }
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `attachments` | array | List of file attachments on the message (empty array if none) |
+| `attachments[].guid` | string | Unique identifier for the attachment |
+| `attachments[].mimeType` | string | MIME type of the file (e.g., `image/jpeg`, `video/mp4`, `audio/aac`) |
+| `attachments[].filename` | string | Original filename |
+| `attachments[].totalBytes` | number | File size in bytes |
+| `attachments[].downloadUrl` | string | URL to download the attachment content (requires API key authentication) |
 
 ## Reaction Events
 
