@@ -131,7 +131,7 @@ Fired when the status of a FaceTime call changes (e.g., the call is answered or 
         "mimeType": "image/jpeg",
         "filename": "photo.jpg",
         "totalBytes": 248000,
-        "downloadUrl": "https://api.textbubbles.com/v1/attachments/att_550e8400/download"
+        "downloadUrl": "https://api.textbubbles.com/v1/attachments/eyJpbnN0YW5jZUlkIjoiLi4uIn0.HMAC_SIGNATURE"
       }
     ]
   }
@@ -145,7 +145,7 @@ Fired when the status of a FaceTime call changes (e.g., the call is answered or 
 | `attachments[].mimeType` | string | MIME type of the file (e.g., `image/jpeg`, `video/mp4`, `audio/aac`) |
 | `attachments[].filename` | string | Original filename |
 | `attachments[].totalBytes` | number | File size in bytes |
-| `attachments[].downloadUrl` | string | URL to download the attachment content (requires API key authentication) |
+| `attachments[].downloadUrl` | string | Pre-signed URL to download the attachment. Time-limited (1 hour) and self-authenticated — no API key required. Fetch directly via GET request |
 
 ## Reaction Events
 
@@ -160,7 +160,29 @@ Reaction webhooks include structured data about the reaction:
     "reaction": {
       "type": "love",
       "targetMessageId": "msg_xyz789",
+      "targetExternalId": "guid-of-original-message",
       "content": "Loved \"Hello!\""
+    },
+    "from": "+14155551234",
+    "channel": "imessage"
+  }
+}
+```
+
+Emoji and sticker reactions (iOS 17+ / macOS 14+) include an `emoji` field:
+
+```json
+{
+  "id": "evt_def456",
+  "type": "message.reaction",
+  "timestamp": "2026-03-28T10:00:05.000Z",
+  "data": {
+    "reaction": {
+      "type": "emoji",
+      "emoji": "🥓",
+      "targetMessageId": "msg_xyz789",
+      "targetExternalId": "guid-of-original-message",
+      "content": null
     },
     "from": "+14155551234",
     "channel": "imessage"
@@ -170,9 +192,11 @@ Reaction webhooks include structured data about the reaction:
 
 | Field | Description |
 |-------|-------------|
-| `reaction.type` | Reaction type: love, like, dislike, laugh, emphasize, question |
-| `reaction.targetMessageId` | The message the reaction was applied to |
-| `reaction.content` | Human-readable description |
+| `reaction.type` | Reaction type: `love`, `like`, `dislike`, `laugh`, `emphasize`, `question`, `emoji`, `remove` |
+| `reaction.emoji` | The emoji character (present only when `type` is `emoji`) |
+| `reaction.targetMessageId` | Internal message ID the reaction was applied to (null if not found) |
+| `reaction.targetExternalId` | BlueBubbles GUID of the original message |
+| `reaction.content` | Human-readable description (null for emoji reactions) |
 
 ## Subscribing to Events
 

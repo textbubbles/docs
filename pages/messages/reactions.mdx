@@ -50,7 +50,31 @@ When a reaction is received on an inbound message, you'll get a structured webho
     "reaction": {
       "type": "love",
       "targetMessageId": "msg_xyz789",
-      "content": "Loved "Hello!""
+      "targetExternalId": "guid-of-original-message",
+      "content": "Loved \"Hello!\""
+    },
+    "from": "+14155551234",
+    "channel": "imessage"
+  }
+}
+```
+
+### Emoji Reactions (iOS 17+)
+
+iOS 17 and macOS 14 introduced emoji and sticker reactions. These are delivered with `type: "emoji"` and include the emoji character:
+
+```json
+{
+  "id": "evt_def456",
+  "type": "message.reaction",
+  "timestamp": "2026-03-28T10:00:05.000Z",
+  "data": {
+    "reaction": {
+      "type": "emoji",
+      "emoji": "🥓",
+      "targetMessageId": "msg_xyz789",
+      "targetExternalId": "guid-of-original-message",
+      "content": null
     },
     "from": "+14155551234",
     "channel": "imessage"
@@ -62,12 +86,16 @@ The `reaction` object contains:
 
 | Field | Description |
 |-------|-------------|
-| `reaction.type` | The reaction type (love, like, dislike, laugh, emphasize, question) |
-| `reaction.targetMessageId` | The message ID the reaction was applied to |
-| `reaction.content` | Human-readable description of the reaction |
+| `reaction.type` | The reaction type: `love`, `like`, `dislike`, `laugh`, `emphasize`, `question`, `emoji`, `remove` |
+| `reaction.emoji` | The emoji character (present only when `type` is `emoji`) |
+| `reaction.targetMessageId` | Internal message ID the reaction was applied to (null if not found) |
+| `reaction.targetExternalId` | BlueBubbles GUID of the original message |
+| `reaction.content` | Human-readable description (null for emoji reactions) |
 
 ## Notes
 
 - Tapback reactions are **iMessage only** — returns `400 CHANNEL_NOT_SUPPORTED` for SMS messages
 - You can only add one reaction per message per sender
 - To remove a reaction, send the same reaction type again (toggle behavior)
+- Emoji/sticker reactions require iOS 17+ or macOS 14+ on the sender's device
+- When a reaction is removed, the webhook fires with `type: "remove"`
