@@ -73,14 +73,49 @@ Fired when an incoming FaceTime call is detected on an instance.
 {
   "type": "facetime.incoming",
   "eventId": "ft-event-uuid",
-  "callUuid": "call-uuid-or-null",
+  "callUuid": "call-uuid-123",
   "caller": "+14155551234",
   "to": "+19876543210",
   "isAudio": false,
   "isVideo": true,
-  "facetimeLink": "facetime://%2B14155551234",
+  "answerUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/answer",
+  "leaveUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/leave",
   "timestamp": 1711584000000
 }
+```
+
+### Answering a FaceTime call
+
+When you receive a `facetime.incoming` webhook, you can answer the call programmatically:
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/answer \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "callUuid": "call-uuid-123",
+    "facetimeLink": "https://facetime.apple.com/join#v=1&p=..."
+  }
+}
+```
+
+The returned `facetimeLink` is a **shareable FaceTime Link** that works on any device:
+- **Apple devices** (iPhone, iPad, Mac) — opens FaceTime natively
+- **Android and Windows** — opens in the browser via WebRTC (no app required)
+
+The flow: our server answers the call, generates a shareable link, admits anyone who joins via the link, then leaves — acting as an automated receptionist.
+
+To hang up a call:
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/leave \
+  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 ### `facetime.status_changed`
@@ -98,7 +133,8 @@ Fired when the status of a FaceTime call changes (e.g., the call is answered or 
   "isAudio": false,
   "isVideo": true,
   "isOutgoing": false,
-  "facetimeLink": "facetime://%2B14155551234"
+  "answerUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/answer",
+  "leaveUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/leave"
 }
 ```
 
@@ -106,11 +142,12 @@ Fired when the status of a FaceTime call changes (e.g., the call is answered or 
 
 | Field | Description |
 |-------|-------------|
+| `callUuid` | Unique identifier for the call session. Required for answering or leaving a call |
 | `to` | The phone number or email of the receiving BlueBubbles instance |
 | `isAudio` / `isVideo` | Distinguish between FaceTime Audio and FaceTime Video calls. A FaceTime Audio call has `isAudio: true, isVideo: false`; a FaceTime Video call has `isAudio: false, isVideo: true` |
-| `facetimeLink` | A URL-scheme link that can be used to call back the caller. Uses `facetime://` for video calls and `facetime-audio://` for audio-only calls |
-| `status` | Current call status. Possible values: `"answered"`, `"disconnected"`, `"missed"`, `"rejected"`, `"failed"` |
-| `callUuid` | Unique identifier for the call session. May be `null` for the initial `facetime.incoming` event if the call has not yet been assigned an ID |
+| `answerUrl` | URL to POST to answer the call and get a shareable FaceTime Link. Requires API key authentication |
+| `leaveUrl` | URL to POST to hang up the call. Requires API key authentication |
+| `status` | Current call status. Possible values: `"incoming"`, `"answered"`, `"disconnected"`, `"missed"`, `"rejected"`, `"failed"` |
 | `isOutgoing` | Whether the call was initiated by the instance (`true`) or received (`false`). Present on `facetime.status_changed` events |
 
 ## Inbound Message Payload
