@@ -47,7 +47,13 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 - Customer-scoped Bearer token authentication with bcrypt-hashed API keys
 - Idempotency key support for safe retries
 - Rate limiting with `Retry-After` headers
-- OpenAPI documentation
 - Customer-scoped webhooks with wildcard event subscriptions
 - 99.9% uptime target
 - HTTPS everywhere
+
+## Machine-Readable Documentation
+
+Building with an AI coding agent? These plain-text files contain the complete API documentation in a single fetch:
+
+- [`/llms.txt`](/llms.txt) — Concise overview with endpoint summary
+- [`/llms-full.txt`](/llms-full.txt) — Complete API documentation (all endpoints, schemas, code examples)

@@ -97,11 +97,57 @@ curl -X POST https://api.textbubbles.com/v1/messages \
     "to": "+14155551234",
     "content": {
       "text": "Check out this image",
-      "mediaUrl": "https://example.com/photo.jpg"
+      "mediaUrls": ["https://example.com/photo.jpg"]
     },
     "routing": { "preference": ["sms"] }
   }'
 ```
+
+## Base64 Attachments
+
+**Base64 attachment (iMessage):**
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": { "text": "Here is the file" },
+    "attachments": [
+      {
+        "type": "base64",
+        "data": "iVBORw0KGgoAAAANSUhEUg...",
+        "mimeType": "image/png",
+        "filename": "chart.png"
+      }
+    ]
+  }'
+```
+
+## Image Carousel
+
+Send 2 or more image URLs in `content.mediaUrls` to send an image carousel:
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": {
+      "text": "Check out these photos!",
+      "mediaUrls": [
+        "https://cdn.example.com/photo1.jpg",
+        "https://cdn.example.com/photo2.png",
+        "https://cdn.example.com/photo3.webp"
+      ]
+    },
+    "effect": "fireworks"
+  }'
+```
+
+Images must be HTTPS URLs pointing to image files (jpg, png, gif, webp). Minimum 2 images, maximum 20 per message.
 
 ## Channel Routing
 
@@ -167,12 +213,14 @@ If a message with the same key already exists, the API returns `200 OK` with the
 |-------|------|----------|-------------|
 | `to` | string | Yes | Recipient phone number (E.164) or iMessage email address |
 | `from` | string | No | Sender address (must be authorized for your customer; uses default if omitted) |
-| `content.text` | string | No | Message text (up to 10,000 chars). Optional if `content.mediaUrl` is provided |
-| `content.mediaUrl` | string | No | Media URL for SMS/MMS |
+| `content.text` | string | No | Message text (up to 10,000 chars). Optional if `content.mediaUrls` is provided |
+| `content.mediaUrls` | string[] | No | Array of 1-20 HTTPS image URLs. When 2+ URLs are provided, sends as an image carousel |
 | `routing.preference` | string[] | No | Channel priority (default: `["imessage", "sms"]`) |
 | `routing.fallback` | boolean | No | Enable fallback (default: `true`) |
 | `replyTo` | string | No | Message ID to reply to (iMessage only) |
 | `attachments` | object[] | No | File attachments (iMessage only) |
+| `attachments[].type` | string | No | Attachment type: `"url"` or `"base64"` |
+| `attachments[].data` | string | No | Base64-encoded file data (when type is `base64`) |
 | `effect` | string | No | Message effect (iMessage only) |
 | `mentions` | object[] | No | @mentions in group chats |
 | `scheduledAt` | string | No | ISO 8601 datetime for scheduled delivery |

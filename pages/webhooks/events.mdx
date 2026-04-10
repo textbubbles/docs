@@ -35,6 +35,11 @@ Every webhook event follows this structure:
 | `message.failed` | Message delivery failed |
 | `message.fallback` | Fallback triggered (e.g., iMessage to SMS) |
 | `message.inbound` | Inbound message received from a contact |
+| `message.reaction` | Tapback or emoji reaction added or removed |
+| `message.unsent` | Message was unsent/retracted |
+| `message.edited` | Message was successfully edited |
+| `message.edit_failed` | Message edit failed |
+| `message.deleted` | Message was soft-deleted |
 
 ## Scheduled Message Events
 
@@ -48,6 +53,21 @@ Every webhook event follows this structure:
 | Event | Description |
 |-------|-------------|
 | `typing.indicator` | Typing indicator activity detected |
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "typing.indicator",
+  "timestamp": "2026-03-28T10:00:00.000Z",
+  "data": {
+    "chatId": "chat_xyz",
+    "from": "+14155551234",
+    "typing": true
+  }
+}
+```
+
+The `typing` field is `true` when the contact starts typing and `false` when they stop.
 
 ## Payment Events
 
@@ -160,6 +180,7 @@ Fired when the status of a FaceTime call changes (e.g., the call is answered or 
   "data": {
     "messageId": "msg_xyz789",
     "from": "+14155551234",
+    "to": "+19876543210",
     "text": "Check out this photo",
     "channel": "imessage",
     "attachments": [
@@ -175,8 +196,15 @@ Fired when the status of a FaceTime call changes (e.g., the call is answered or 
 }
 ```
 
+### Inbound Message Fields
+
 | Field | Type | Description |
 |-------|------|-------------|
+| `messageId` | string | Unique message identifier |
+| `from` | string | Sender's phone number (E.164) or email |
+| `to` | string | Receiving phone number or email (identifies which instance received the message) |
+| `text` | string | Message text content |
+| `channel` | string | Channel the message was received on (`imessage` or `sms`) |
 | `attachments` | array | List of file attachments on the message (empty array if none) |
 | `attachments[].guid` | string | Unique identifier for the attachment |
 | `attachments[].mimeType` | string | MIME type of the file (e.g., `image/jpeg`, `video/mp4`, `audio/aac`) |

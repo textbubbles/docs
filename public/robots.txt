@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://docs.textbubbles.com/sitemap.xml
+
+# LLM agent-readable documentation
+# See https://llmstxt.org for the llms.txt standard
+# llms.txt: concise site overview and endpoint summary
+# llms-full.txt: complete API documentation in a single file

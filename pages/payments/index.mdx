@@ -40,6 +40,14 @@ curl -X POST https://api.textbubbles.com/v1/payments/request \
 }
 ```
 
+### Constraints
+
+| Field | Constraint |
+|-------|-----------|
+| `amount` | 0.01 — 999,999.99 |
+| `currency` | `USD` only |
+| `note` | Maximum 500 characters |
+
 ## List Payment Requests
 
 ```bash
@@ -47,7 +55,15 @@ curl "https://api.textbubbles.com/v1/payments/requests?status=pending" \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-Filter options: `status` (`pending`, `paid`, `cancelled`, `expired`), `from`, `to`, `limit`.
+### Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `status` | string | — | Filter: `pending`, `paid`, `cancelled`, `expired` |
+| `from` | string | — | Start date (ISO 8601) for date range filter |
+| `to` | string | — | End date (ISO 8601) for date range filter |
+| `limit` | integer | 50 | Results per page (1-100) |
+| `cursor` | string | — | Pagination cursor from previous response |
 
 ## Cancel a Payment Request
 

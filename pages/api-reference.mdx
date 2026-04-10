@@ -12,7 +12,6 @@ Complete list of all TextBubbles API endpoints. Base URL: `https://api.textbubbl
 | `POST` | `/v1/messages/:id/unsend` | [Unsend a message](/messages/send#unsend-a-message) |
 | `PUT` | `/v1/messages/:id` | [Edit a message](/messages/send#edit-a-message) |
 | `POST` | `/v1/messages/:id/reactions` | [Send tapback reaction](/messages/reactions) |
-| `POST` | `/v1/messages/carousel` | [Send image carousel](/messages/carousel) |
 | `DELETE` | `/v1/messages/:id` | Soft-delete a message |
 | `GET` | `/v1/messages/scheduled` | [List scheduled messages](/messages/scheduled) |
 | `DELETE` | `/v1/messages/:id/schedule` | [Cancel scheduled message](/messages/scheduled#cancel-a-scheduled-message) |
@@ -201,6 +200,8 @@ An instance can have multiple warnings at the same time. Warnings are cleared au
 | `SCHEDULED_IN_PAST` | 400 | Scheduled time is in the past |
 | `SCHEDULED_TOO_FAR` | 400 | Scheduled time is more than 30 days away |
 | `DEPRECATED` | 410 | Endpoint has been deprecated |
-| `RATE_LIMITED` | 429 | Too many requests |
+| `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
+| `BLUEBUBBLES_TIMEOUT` | 504 | Upstream iMessage service timed out |
+| `EDIT_FAILED` | 502 | Message edit could not be completed |
 | `IMESSAGE_SEND_FAILED` | 500 | iMessage delivery error |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |

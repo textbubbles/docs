@@ -10,10 +10,12 @@ curl -X POST https://api.textbubbles.com/v1/contacts \
   -H "Content-Type: application/json" \
   -d '{
     "phoneNumber": "+14155551234",
+    "email": "jane@example.com",
     "firstName": "Jane",
     "lastName": "Doe",
     "company": "Acme",
-    "tags": ["vip", "enterprise"]
+    "tags": ["vip", "enterprise"],
+    "metadata": { "source": "website" }
   }'
 ```
 
@@ -47,6 +49,15 @@ curl "https://api.textbubbles.com/v1/contacts?tag=vip" \
 curl "https://api.textbubbles.com/v1/contacts?search=jane" \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
+
+### Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `search` | string | — | Search by name, phone, email, or company |
+| `tag` | string | — | Filter by tag |
+| `limit` | integer | 50 | Results per page (1-100) |
+| `offset` | integer | 0 | Number of results to skip |
 
 ## Get a Contact
 
@@ -106,6 +117,40 @@ Check if a contact has a Focus mode active:
 ```bash
 curl https://api.textbubbles.com/v1/contacts/+14155551234/focus \
   -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "focused": true,
+    "focusMode": "Do Not Disturb",
+    "cached": true
+  }
+}
+```
+
+## FaceTime Availability
+
+Check if a contact is available on FaceTime:
+
+```bash
+curl https://api.textbubbles.com/v1/contacts/+14155551234/facetime \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "available": true,
+    "cached": true
+  }
+}
 ```
 
 ## Endpoints
