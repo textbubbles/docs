@@ -14,8 +14,11 @@ curl -X PUT https://api.textbubbles.com/v1/webhooks \
       "message.queued",
       "message.sent",
       "message.delivered",
+      "message.read",
       "message.failed",
-      "message.inbound"
+      "message.inbound",
+      "message.reaction",
+      "typing.indicator"
     ],
     "secret": "whsec_your_signing_secret"
   }'

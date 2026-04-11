@@ -2,6 +2,8 @@
 
 Send emoji reactions to messages via `POST /v1/messages/:id/reactions`. Tapbacks are an iMessage-only feature.
 
+The `:id` in the URL is the **internal TextBubbles message ID** (e.g. `msg_abc123`) — not the provider GUID. For outbound messages this is the ID returned from `POST /v1/messages`. For inbound messages received via the `message.inbound` webhook, use the `messageId` field in the webhook payload (not `externalMessageId`).
+
 ## Send a Reaction
 
 ```bash

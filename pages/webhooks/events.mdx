@@ -62,12 +62,22 @@ Every webhook event follows this structure:
   "data": {
     "chatId": "chat_xyz",
     "from": "+14155551234",
-    "typing": true
+    "to": "+19876543210",
+    "typing": true,
+    "channel": "imessage"
   }
 }
 ```
 
-The `typing` field is `true` when the contact starts typing and `false` when they stop.
+| Field | Description |
+|-------|-------------|
+| `chatId` | Provider-level chat identifier (e.g. `iMessage;-;+14155551234`) |
+| `from` | Phone number of the contact who is typing (E.164) |
+| `to` | Phone number of the instance receiving the indicator |
+| `typing` | `true` when the contact starts typing, `false` when they stop |
+| `channel` | Always `"imessage"` — SMS does not emit typing indicators |
+
+Typing indicators are ephemeral. A `true` event is not always followed by a `false` event — consumers should treat a `true` event as "typing for the next ~5 seconds" and time out locally.
 
 ## Payment Events
 
@@ -170,6 +180,33 @@ Fired when the status of a FaceTime call changes (e.g., the call is answered or 
 | `status` | Current call status. Possible values: `"incoming"`, `"answered"`, `"disconnected"`, `"missed"`, `"rejected"`, `"failed"` |
 | `isOutgoing` | Whether the call was initiated by the instance (`true`) or received (`false`). Present on `facetime.status_changed` events |
 
+## Status Event Payloads
+
+Delivery-status events (`message.sent`, `message.delivered`, `message.read`, `message.failed`, etc.) all share the same shape:
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "message.read",
+  "timestamp": "2026-03-28T10:00:07.000Z",
+  "data": {
+    "messageId": "msg_xyz789",
+    "externalMessageId": "AB12CD34-5678-90EF-1234-567890ABCDEF",
+    "channel": "imessage",
+    "readAt": "2026-03-28T10:00:07.000Z"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `messageId` | Internal TextBubbles message ID |
+| `externalMessageId` | Provider-level GUID |
+| `channel` | `imessage` or `sms` |
+| `readAt` | ISO-8601 timestamp (present on `message.read` only) |
+
+> `message.read` is iMessage-only and is only delivered if the recipient has read receipts enabled on their device. It is a **distinct** event from `message.delivered` — do not collapse them when tracking delivery state.
+
 ## Inbound Message Payload
 
 ```json
@@ -179,10 +216,12 @@ Fired when the status of a FaceTime call changes (e.g., the call is answered or 
   "timestamp": "2026-03-28T10:00:00.000Z",
   "data": {
     "messageId": "msg_xyz789",
+    "externalMessageId": "AB12CD34-5678-90EF-1234-567890ABCDEF",
     "from": "+14155551234",
     "to": "+19876543210",
     "text": "Check out this photo",
     "channel": "imessage",
+    "parentMessageId": null,
     "attachments": [
       {
         "guid": "att_550e8400-e29b-41d4-a716-446655440000",
@@ -200,17 +239,21 @@ Fired when the status of a FaceTime call changes (e.g., the call is answered or 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `messageId` | string | Unique message identifier |
+| `messageId` | string | Internal TextBubbles message ID. Use this when calling endpoints like `POST /v1/messages/:id/reactions` or `PUT /v1/messages/:id` in response to the inbound message |
+| `externalMessageId` | string | Provider-level identifier (iMessage GUID). Use for correlating with provider logs |
 | `from` | string | Sender's phone number (E.164) or email |
 | `to` | string | Receiving phone number or email (identifies which instance received the message) |
 | `text` | string | Message text content |
 | `channel` | string | Channel the message was received on (`imessage` or `sms`) |
+| `parentMessageId` | string \| null | The internal messageId this inbound message is replying to (thread reply), or `null` |
 | `attachments` | array | List of file attachments on the message (empty array if none) |
 | `attachments[].guid` | string | Unique identifier for the attachment |
 | `attachments[].mimeType` | string | MIME type of the file (e.g., `image/jpeg`, `video/mp4`, `audio/aac`) |
 | `attachments[].filename` | string | Original filename |
 | `attachments[].totalBytes` | number | File size in bytes |
 | `attachments[].downloadUrl` | string | Pre-signed URL to download the attachment. Time-limited (1 hour) and self-authenticated — no API key required. Fetch directly via GET request |
+
+> **Replying to inbound messages:** always use `messageId` (internal), not `externalMessageId`, when invoking TextBubbles API endpoints. For example, to react to the inbound message above, `POST /v1/messages/msg_xyz789/reactions`.
 
 ## Reaction Events
 
@@ -276,8 +319,11 @@ curl -X PUT https://api.textbubbles.com/v1/webhooks \
     "events": [
       "message.sent",
       "message.delivered",
+      "message.read",
       "message.failed",
       "message.inbound",
+      "message.reaction",
+      "typing.indicator",
       "payment.request.paid"
     ]
   }'
