@@ -1631,16 +1631,11 @@ No authentication required. Not rate-limited.
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-04-06T12:00:00.000Z",
+  "timestamp": "2026-04-10T12:00:00.000Z",
   "checks": {
     "database": { "status": "ok" },
     "redis": { "status": "ok" },
     "bluebubbles": { "status": "ok" },
-    "sms": {
-      "telnyx": { "status": "configured" },
-      "twilio": { "status": "not_configured" },
-      "available": true
-    },
     "whatsapp": {
       "status": "not_enabled",
       "experimental": true
@@ -1649,7 +1644,7 @@ No authentication required. Not rate-limited.
 }
 ```
 
-Top-level status is "ok" when database and Redis are reachable, "degraded" if either is down.
+Top-level status is "ok" when database and Redis are reachable, "degraded" if either is down. SMS fallback is handled natively by iMessage on the Mac mini (Messages.app falls back via the connected iPhone when iMessage fails), so there is no separate SMS provider to monitor.
 
 ## Instance Health Statuses
 

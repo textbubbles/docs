@@ -218,16 +218,11 @@ The health check endpoint requires no authentication and is not rate-limited. It
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-04-06T12:00:00.000Z",
+  "timestamp": "2026-04-10T12:00:00.000Z",
   "checks": {
     "database": { "status": "ok" },
     "redis": { "status": "ok" },
     "bluebubbles": { "status": "ok" },
-    "sms": {
-      "telnyx": { "status": "configured" },
-      "twilio": { "status": "not_configured" },
-      "available": true
-    },
     "whatsapp": {
       "status": "not_enabled",
       "experimental": true
@@ -236,7 +231,9 @@ The health check endpoint requires no authentication and is not rate-limited. It
 }
 ```
 
-The top-level `status` is `"ok"` when the database and Redis are both reachable, or `"degraded"` if either is down. BlueBubbles, SMS, and WhatsApp statuses are reported for visibility but do not affect the top-level status.
+The top-level `status` is `"ok"` when the database and Redis are both reachable, or `"degraded"` if either is down. BlueBubbles and WhatsApp statuses are reported for visibility but do not affect the top-level status.
+
+SMS fallback is handled natively by iMessage on the Mac mini — when an iMessage send fails to a non-iMessage recipient, Messages.app automatically falls back to SMS via the connected iPhone. There is no separate SMS provider to monitor.
 
 ### Instance Health Status
 
