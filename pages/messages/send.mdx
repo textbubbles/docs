@@ -65,6 +65,28 @@ curl -X POST https://api.textbubbles.com/v1/messages \
   }'
 ```
 
+## Attachments vs Media URLs — Which Field Do I Use?
+
+TextBubbles exposes two ways to send non-text content on a message, and they map to different channels. Picking the wrong one is the most common source of "my image didn't send" bugs, so here is the decision rule.
+
+| Use | Field | Channels | Source types | Notes |
+|-----|-------|----------|--------------|-------|
+| Send a file (photo, video, PDF, audio, any MIME type) over **iMessage** | `attachments[]` | iMessage only | `type: "url"` (HTTPS) or `type: "base64"` | Full iMessage attachment semantics. Required for non-image files. |
+| Send an image over **SMS/MMS** | `content.mediaUrls` | SMS/MMS (and iMessage as image carousel when 2+ URLs) | HTTPS image URLs only | The carrier fetches the URL and attaches the image as MMS. |
+| Send an **image carousel** over iMessage | `content.mediaUrls` (2–20 URLs) | iMessage | HTTPS image URLs | Automatically detected as carousel when 2+ URLs are provided. |
+
+### Decision tree
+
+1. **Is the recipient on SMS only (no iMessage)?** Use `content.mediaUrls`. `attachments[]` is ignored on the SMS path.
+2. **Do you need to send a non-image file** (PDF, video, audio, vCard, etc.)? Use `attachments[]` with `type: "url"` or `type: "base64"`. SMS/MMS cannot carry arbitrary file types in all carrier networks — [check capabilities](/api-reference#get-v1capabilitiesphonenumber) first.
+3. **Do you want to send 2+ images as a carousel?** Use `content.mediaUrls`. Do not use `attachments[]` for this — only `mediaUrls` triggers carousel messageType.
+4. **Do you have raw bytes** (not a public URL) and need to send over iMessage? Use `attachments[]` with `type: "base64"`.
+5. **Everything else (single image over iMessage with an HTTPS URL):** either works; prefer `attachments[]` for explicit control over `mimeType` and `filename`.
+
+### Do not combine
+
+Do not set both `attachments[]` and `content.mediaUrls` on the same request. If you do, `attachments[]` wins on the iMessage path and `mediaUrls` wins on the SMS path, which results in different payloads depending on which channel the router picks — almost never what you want.
+
 ## With Attachments
 
 **URL attachment (iMessage):**

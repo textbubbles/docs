@@ -47,31 +47,166 @@ curl https://api.textbubbles.com/v1/webhooks \
 
 Returns `null` if no webhook is configured for your customer.
 
+## Delete Webhook Configuration
+
+Remove your webhook configuration entirely. Events will no longer be delivered until you re-register with `PUT /v1/webhooks`.
+
+```bash
+curl -X DELETE https://api.textbubbles.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "deleted": true
+  },
+  "requestId": "req_abc123"
+}
+```
+
+Returns `404 NOT_FOUND` if no webhook configuration exists for your customer.
+
+## Send a Test Event
+
+Trigger a synthetic `webhook.test` event to your configured webhook URL. Useful for verifying connectivity, TLS, and signature handling on your endpoint without waiting for real traffic.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/webhooks/test \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "delivered": true,
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "responseStatus": 200,
+    "eventId": "evt_test_550e8400-e29b-41d4-a716-446655440000"
+  },
+  "requestId": "req_abc123"
+}
+```
+
+The test event delivered to your endpoint has this shape:
+
+```json
+{
+  "id": "evt_test_550e8400-e29b-41d4-a716-446655440000",
+  "type": "webhook.test",
+  "timestamp": "2026-04-09T10:00:00.000Z",
+  "data": {
+    "message": "This is a test webhook from TextBubbles"
+  }
+}
+```
+
+The request is signed the same way as production events, so you can use it to end-to-end test your [signature verification](#signature-verification) code. If your endpoint does not return a `2xx`, the response includes `delivered: false` and the upstream status code.
+
+## Rotate Signing Secret
+
+Generate a new signing secret for your webhook. The old secret is immediately invalidated — update your endpoint with the new secret before rotating, or be prepared for a brief verification gap.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/webhooks/rotate-secret \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "secret": "whsec_new_generated_secret_value",
+    "rotatedAt": "2026-04-09T10:00:00.000Z"
+  },
+  "requestId": "req_abc123"
+}
+```
+
+> **Important:** The `secret` value is returned **only once** in this response. Store it immediately — it cannot be retrieved later via `GET /v1/webhooks`. If you lose it, call this endpoint again to rotate a new secret.
+
+Returns `404 NOT_FOUND` if no webhook configuration exists for your customer. Rotation applies only after the per-webhook signing secret rollout reaches your account — see the note in [Signature Verification](#signature-verification).
+
 ## Signature Verification
 
 Every webhook request includes two headers:
 
-- **`X-Signature`** — `sha256={hmac_hex}` HMAC-SHA256 signature
-- **`X-Timestamp`** — Unix timestamp (seconds) when the webhook was sent
+- **`X-Signature`** — `sha256={hmac_hex}` HMAC-SHA256 signature (lowercase hex, prefixed with `sha256=`)
+- **`X-Timestamp`** — Unix timestamp in **seconds** (not milliseconds) when the webhook was signed
+
+> **Important — which secret is used**
+>
+> The signature is currently computed with a **platform-wide signing secret** managed by TextBubbles, **not** the per-webhook `secret` you pass to `PUT /v1/webhooks`. To verify signatures on your endpoint, contact TextBubbles support to retrieve your platform signing secret, or ask to have your account placed on the per-webhook secret rollout. The `secret` field on `PUT /v1/webhooks` is stored but not yet used for outbound signing — a future release will switch signing to the per-webhook secret. Until then, do not attempt to verify using a secret you set yourself; use the platform secret TextBubbles provides.
 
 ### Verification Steps
 
 1. Extract the timestamp and signature from the headers
-2. Construct the signed payload: `{timestamp}.{raw_request_body}`
-3. Compute HMAC-SHA256 using your webhook secret
-4. Compare signatures using constant-time comparison
-5. Reject requests older than 5 minutes to prevent replay attacks
+2. Read the **exact raw request body bytes** — do NOT parse and re-serialize JSON, as key order or whitespace differences will break the signature
+3. Construct the signed payload string: `{timestamp}.{raw_request_body}` (a literal `.` between the timestamp and body)
+4. Compute `HMAC-SHA256(secret, signedPayload)` and hex-encode the digest
+5. Prepend `sha256=` and compare to `X-Signature` using constant-time comparison
+6. Reject requests where `|now - timestamp| > 300` seconds to prevent replay attacks
 
-### Node.js Example
+### Algorithm Reference
+
+```
+signedPayload = timestamp + "." + rawRequestBody
+expected      = "sha256=" + lowerHex(HMAC_SHA256(secret, signedPayload))
+valid         = constantTimeEqual(expected, X-Signature) AND abs(now - timestamp) <= 300
+```
+
+### Unit Test Fixture
+
+You can use this known-good fixture to verify your implementation. If your code produces the expected signature below, your verifier is correct.
+
+| Field | Value |
+|-------|-------|
+| `secret` | `whsec_test_secret_do_not_use_in_production` |
+| `X-Timestamp` | `1774699203` |
+| Raw body | `{"id":"evt_550e8400-e29b-41d4-a716-446655440000","type":"message.delivered","timestamp":"2026-03-28T10:00:03.000Z","data":{"messageId":"msg_xyz","externalMessageId":"external-guid","from":"+19876543210","to":"+14155551234","text":"Hello!","channel":"imessage","status":"delivered"}}` |
+| Expected `X-Signature` | `sha256=d055c034071c12e906654f864c1e5a03fbdea2399444cdf4448f35bf81218977` |
+
+```javascript
+import crypto from 'crypto';
+
+const secret = 'whsec_test_secret_do_not_use_in_production';
+const timestamp = '1774699203';
+const rawBody = '{"id":"evt_550e8400-e29b-41d4-a716-446655440000","type":"message.delivered","timestamp":"2026-03-28T10:00:03.000Z","data":{"messageId":"msg_xyz","externalMessageId":"external-guid","from":"+19876543210","to":"+14155551234","text":"Hello!","channel":"imessage","status":"delivered"}}';
+
+const signedPayload = `${timestamp}.${rawBody}`;
+const signature = 'sha256=' + crypto
+  .createHmac('sha256', secret)
+  .update(signedPayload)
+  .digest('hex');
+
+console.log(signature);
+// → sha256=d055c034071c12e906654f864c1e5a03fbdea2399444cdf4448f35bf81218977
+```
+
+### Node.js Example (Express)
+
+The critical detail: capture the **raw body buffer** before `express.json()` parses it. Verifying against a re-serialized `req.body` will fail.
 
 ```javascript
 import crypto from 'crypto';
 import express from 'express';
 
 const app = express();
-app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+// Capture raw body bytes for signature verification
+app.use(express.json({
+  verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); }
+}));
+
+const WEBHOOK_SECRET = process.env.TEXTBUBBLES_WEBHOOK_SECRET;
 
 function verifySignature(req) {
   const signature = req.headers['x-signature'];
@@ -79,20 +214,22 @@ function verifySignature(req) {
 
   if (!signature || !timestamp) return false;
 
-  // Reject requests older than 5 minutes
-  const age = Math.abs(Date.now() / 1000 - parseInt(timestamp));
+  // Reject requests older than 5 minutes (timestamp is in seconds)
+  const age = Math.abs(Math.floor(Date.now() / 1000) - parseInt(timestamp, 10));
   if (age > 300) return false;
 
+  // Use the raw body string, NOT JSON.stringify(req.body)
   const signedPayload = `${timestamp}.${req.rawBody}`;
   const expected = 'sha256=' + crypto
     .createHmac('sha256', WEBHOOK_SECRET)
     .update(signedPayload)
     .digest('hex');
 
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expected)
-  );
+  // Constant-time comparison — both buffers must be the same length
+  const sigBuf = Buffer.from(signature);
+  const expBuf = Buffer.from(expected);
+  if (sigBuf.length !== expBuf.length) return false;
+  return crypto.timingSafeEqual(sigBuf, expBuf);
 }
 
 app.post('/webhooks/textbubbles', (req, res) => {
@@ -127,18 +264,32 @@ import hmac
 import hashlib
 import time
 
-def verify_webhook(payload_body, signature, timestamp, secret):
+def verify_webhook(raw_body: str, signature: str, timestamp: str, secret: str) -> bool:
+    """
+    raw_body: the exact request body as a string (do NOT re-serialize parsed JSON)
+    signature: value of the X-Signature header, e.g. "sha256=abc123..."
+    timestamp: value of the X-Timestamp header (unix seconds, as a string)
+    secret: your TextBubbles platform signing secret
+    """
     age = abs(time.time() - int(timestamp))
     if age > 300:
         return False
 
-    signed_payload = f"{timestamp}.{payload_body}"
+    signed_payload = f"{timestamp}.{raw_body}"
     expected = "sha256=" + hmac.new(
         secret.encode(), signed_payload.encode(), hashlib.sha256
     ).hexdigest()
 
     return hmac.compare_digest(signature, expected)
 ```
+
+### Common Verification Pitfalls
+
+- **Re-serializing parsed JSON.** `JSON.stringify(req.body)` or `json.dumps(request.json())` will almost never reproduce the exact bytes the API signed. Always verify against the raw body.
+- **Wrong separator.** The signed string is `{timestamp}.{body}` — a literal ASCII period between timestamp and body, with no spaces.
+- **Millisecond vs second timestamp.** `X-Timestamp` is Unix **seconds**. Dividing `Date.now()` by 1000 and flooring gives the right unit.
+- **Forgetting the `sha256=` prefix** in the comparison string.
+- **Using a secret you set.** The per-webhook `secret` field on `PUT /v1/webhooks` is not currently the signing key — see the note at the top of this section.
 
 ## Retry Policy
 
