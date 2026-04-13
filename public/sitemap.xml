@@ -37,22 +37,6 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://docs.textbubbles.com/chats/groups</loc>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://docs.textbubbles.com/chats/typing</loc>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://docs.textbubbles.com/contacts</loc>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://docs.textbubbles.com/payments</loc>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://docs.textbubbles.com/webhooks/setup</loc>
     <priority>0.8</priority>
   </url>

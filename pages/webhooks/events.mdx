@@ -48,46 +48,6 @@ Every webhook event follows this structure:
 | `message.scheduled` | Message scheduled for future delivery |
 | `message.schedule_cancelled` | Scheduled message was cancelled |
 
-## Typing Events
-
-| Event | Description |
-|-------|-------------|
-| `typing.indicator` | Typing indicator activity detected |
-
-```json
-{
-  "id": "evt_abc123",
-  "type": "typing.indicator",
-  "timestamp": "2026-03-28T10:00:00.000Z",
-  "data": {
-    "chatId": "chat_xyz",
-    "from": "+14155551234",
-    "to": "+19876543210",
-    "typing": true,
-    "channel": "imessage"
-  }
-}
-```
-
-| Field | Description |
-|-------|-------------|
-| `chatId` | Provider-level chat identifier (e.g. `iMessage;-;+14155551234`) |
-| `from` | Phone number of the contact who is typing (E.164) |
-| `to` | Phone number of the instance receiving the indicator |
-| `typing` | `true` when the contact starts typing, `false` when they stop |
-| `channel` | Always `"imessage"` — SMS does not emit typing indicators |
-
-Typing indicators are ephemeral. A `true` event is not always followed by a `false` event — consumers should treat a `true` event as "typing for the next ~5 seconds" and time out locally.
-
-## Payment Events
-
-| Event | Description |
-|-------|-------------|
-| `payment.request.created` | Payment request sent |
-| `payment.request.paid` | Payment detected via incoming message |
-| `payment.request.cancelled` | Payment request cancelled |
-| `payment.request.expired` | Payment request expired |
-
 ## FaceTime Events
 
 | Event | Description |
@@ -323,8 +283,7 @@ curl -X PUT https://api.textbubbles.com/v1/webhooks \
       "message.failed",
       "message.inbound",
       "message.reaction",
-      "typing.indicator",
-      "payment.request.paid"
+      "message.inbound"
     ]
   }'
 ```
