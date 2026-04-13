@@ -33,17 +33,9 @@ import type {
   MessageStatus,
   MessageEffect,
 
-  // Contacts
-  Contact,
-  CreateContactOptions,
-
   // Webhooks
   WebhookEvent,
   WebhookConfig,
-
-  // Payments
-  PaymentRequest,
-  CreatePaymentOptions,
 
   // Capabilities
   Capabilities,
@@ -85,10 +77,6 @@ function handleWebhook(event: WebhookEvent) {
     case 'message.inbound':
       // event.data is typed as InboundEventData
       console.log(`From ${event.data.from}: ${event.data.text}`);
-      break;
-    case 'payment.request.paid':
-      // event.data is typed as PaymentPaidEventData
-      console.log(`Payment received: $${event.data.amount}`);
       break;
   }
 }

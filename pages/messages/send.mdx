@@ -244,9 +244,7 @@ If a message with the same key already exists, the API returns `200 OK` with the
 | `attachments[].type` | string | No | Attachment type: `"url"` or `"base64"` |
 | `attachments[].data` | string | No | Base64-encoded file data (when type is `base64`) |
 | `effect` | string | No | Message effect (iMessage only) |
-| `mentions` | object[] | No | @mentions in group chats |
 | `scheduledAt` | string | No | ISO 8601 datetime for scheduled delivery |
 | `idempotencyKey` | string | No | Unique key for deduplication |
 | `callbackUrl` | string | No | Per-message webhook URL |
 | `metadata` | object | No | Custom key-value data |
-| `createContact` | boolean | No | Auto-create contact if not exists |

@@ -102,43 +102,6 @@ textbubbles messages get msg_abc123
 textbubbles messages cancel msg_abc123
 ```
 
-## Contacts
-
-### List Contacts
-
-```bash
-# All contacts
-textbubbles contacts list
-
-# Filter by tag
-textbubbles contacts list --tag vip
-
-# Search by name
-textbubbles contacts list --search "Jane"
-```
-
-### Create Contact
-
-```bash
-textbubbles contacts create \
-  --phone "+14155551234" \
-  --name "Jane Doe" \
-  --email "jane@example.com" \
-  --tags vip,customer
-```
-
-### Get Contact
-
-```bash
-textbubbles contacts get contact_abc123
-```
-
-### Delete Contact
-
-```bash
-textbubbles contacts delete contact_abc123
-```
-
 ## Capabilities
 
 ### Check iMessage Support
@@ -166,26 +129,6 @@ textbubbles webhooks get
 textbubbles webhooks set https://example.com/webhooks/textbubbles \
   --secret whsec_your_secret \
   --events message.received,message.delivered
-```
-
-## Payments
-
-### Request Payment
-
-```bash
-textbubbles pay:request "+14155551234" 25.00 --memo "For lunch"
-```
-
-### List Payment Requests
-
-```bash
-textbubbles pay:list
-```
-
-### Cancel Payment Request
-
-```bash
-textbubbles pay:cancel pay_abc123
 ```
 
 ## Global Options
