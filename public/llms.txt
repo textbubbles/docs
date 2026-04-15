@@ -32,6 +32,7 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 - [Message Effects](https://docs.textbubbles.com/messages/effects): iMessage effects (confetti, fireworks, etc.)
 - [Webhook Setup](https://docs.textbubbles.com/webhooks/setup): Configure webhook URL, signature verification
 - [Webhook Events](https://docs.textbubbles.com/webhooks/events): All event types and payload schemas
+- [Realtime Events (SSE)](https://docs.textbubbles.com/webhooks/events#realtime-sse): GET /v1/events — live event stream without hosting a webhook endpoint
 - [SDK Installation](https://docs.textbubbles.com/sdk/installation): npm install @textbubbles/js
 - [TypeScript SDK](https://docs.textbubbles.com/sdk/typescript): SDK usage guide
 - [Next.js Integration](https://docs.textbubbles.com/sdk/nextjs): Next.js integration guide
@@ -60,6 +61,9 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 ### Webhooks
 - GET /v1/webhooks — Get webhook config
 - PUT /v1/webhooks — Set webhook URL and events
+
+### Realtime Events
+- GET /v1/events — Server-Sent Events stream of realtime events (same payloads as webhooks)
 
 ### FaceTime
 - POST /v1/facetime/:callUuid/answer — Answer incoming call

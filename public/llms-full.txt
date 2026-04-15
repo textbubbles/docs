@@ -1163,6 +1163,36 @@ Response:
 
 ---
 
+# Realtime Events (SSE)
+
+For realtime delivery without hosting a public webhook endpoint, open a Server-Sent Events stream. The SSE stream emits the same events, with the same payload envelope, as webhooks.
+
+## GET /v1/events
+
+```bash
+curl -N -H "Authorization: Bearer tb_xxxxx" \
+  "https://api.textbubbles.com/v1/events?events=message.inbound,message.delivered"
+```
+
+The `events` query parameter is an optional comma-separated filter. Omit it or pass `*` to receive every event.
+
+Each message in the stream is a standard SSE frame:
+
+```
+id: evt_550e8400-e29b-41d4-a716-446655440000
+event: message.inbound
+data: {"id":"evt_...","type":"message.inbound","timestamp":"2026-04-14T10:00:00.000Z","data":{"messageId":"msg_...","from":"+14155551234","to":"+19876543210","text":"Hi","channel":"imessage"}}
+
+```
+
+Notes:
+- Heartbeats (`: heartbeat`) are sent every 15 seconds so clients can detect dead connections.
+- Multiple subscribers may connect with the same API key; each receives every event.
+- SSE is fire-and-forget. Events emitted while no client is connected are **not** replayed. Use webhooks (with retry) for at-least-once delivery.
+- The event envelope and `type` values are identical to the webhook payloads — see [Webhook Event Reference](#webhook-event-reference).
+
+---
+
 # Capabilities
 
 ## GET /v1/capabilities/:phone

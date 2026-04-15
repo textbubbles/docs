@@ -299,3 +299,40 @@ curl -X PUT https://api.textbubbles.com/v1/webhooks \
     "events": ["*"]
   }'
 ```
+
+## Realtime SSE
+
+If you cannot host a public webhook URL — for example during local development, inside a script, or from a browser app — open a Server-Sent Events stream to `GET /v1/events` instead. The stream emits the same event types and payloads as webhooks, over a single long-lived HTTP connection.
+
+```bash
+curl -N -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://api.textbubbles.com/v1/events?events=message.inbound"
+```
+
+The `events` query parameter is an optional comma-separated filter; omit it (or pass `*`) to receive every event.
+
+Each frame in the stream is a standard SSE message:
+
+```
+id: evt_abc
+event: message.inbound
+data: {"id":"evt_abc","type":"message.inbound","timestamp":"2026-04-14T10:00:00.000Z","data":{"messageId":"msg_...","from":"+14155551234","text":"Hi"}}
+```
+
+A `: heartbeat` comment is sent every 15 seconds so clients can detect dead connections.
+
+**SSE vs webhooks:** SSE is fire-and-forget — events emitted while no client is connected are not replayed. Use webhooks when you need at-least-once delivery with retries. SSE is ideal as a lightweight complement: live UI updates during development, admin dashboards, or inbound-message relays where occasional gaps during reconnects are acceptable.
+
+The TypeScript SDK ships a ready-made SSE client:
+
+```ts
+import { TextBubblesEventClient } from "@textbubbles/js";
+
+const events = new TextBubblesEventClient({
+  url: "https://api.textbubbles.com/v1/events",
+  headers: { Authorization: `Bearer ${process.env.TEXTBUBBLES_API_KEY}` },
+});
+
+events.on("message.inbound", (e) => console.log(e.data.from, e.data.text));
+events.connect();
+```
