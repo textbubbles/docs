@@ -39,6 +39,21 @@ curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/reactions \
 | `emphasize` | ‼️ | Exclamation marks |
 | `question` | ❓ | Question mark |
 
+## Remove a Reaction
+
+To remove a reaction you previously sent, send the negative form of the same type (`-love`, `-like`, `-dislike`, `-laugh`, `-emphasize`, `-question`):
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/reactions \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "-love"
+  }'
+```
+
+You can only remove a reaction that you previously added via the API.
+
 ## Reaction Webhooks
 
 When a reaction is received on an inbound message, you'll get a structured webhook payload:
@@ -98,6 +113,6 @@ The `reaction` object contains:
 
 - Tapback reactions are **iMessage only** — returns `400 CHANNEL_NOT_SUPPORTED` for SMS messages
 - You can only add one reaction per message per sender
-- To remove a reaction, send the same reaction type again (toggle behavior)
+- To remove a reaction, send the negative form (e.g. `-love`) — see [Remove a Reaction](#remove-a-reaction) above
 - Emoji/sticker reactions require iOS 17+ or macOS 14+ on the sender's device
 - When a reaction is removed, the webhook fires with `type: "remove"`
