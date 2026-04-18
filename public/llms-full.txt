@@ -672,10 +672,23 @@ Response:
 | emphasize | exclamation marks | Exclamation marks |
 | question | question mark | Question mark |
 
+## Remove a Reaction
+
+To remove a reaction you previously sent, POST to the same endpoint with the negative form of the type: `-love`, `-like`, `-dislike`, `-laugh`, `-emphasize`, `-question`.
+
+```
+curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/reactions \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "-love"}'
+```
+
+You can only remove a reaction that you previously added via the API.
+
 Notes:
 - iMessage only — returns 400 CHANNEL_NOT_SUPPORTED for SMS
 - One reaction per message per sender
-- Send same type again to remove (toggle)
+- To remove, send the negative form (e.g. -love)
 - Emoji/sticker reactions require iOS 17+ or macOS 14+
 
 ---
