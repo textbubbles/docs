@@ -973,40 +973,8 @@ Fired when an incoming FaceTime call is detected on an instance.
   "to": "+19876543210",
   "isAudio": false,
   "isVideo": true,
-  "answerUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/answer",
-  "leaveUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/leave",
   "timestamp": 1711584000000
 }
-```
-
-### Answering a FaceTime call
-
-```bash
-curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/answer \
-  -H "Authorization: Bearer YOUR_API_KEY"
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "data": {
-    "callUuid": "call-uuid-123",
-    "facetimeLink": "https://facetime.apple.com/join#v=1&p=..."
-  }
-}
-```
-
-The returned facetimeLink is a shareable FaceTime Link that works on any device:
-- Apple devices (iPhone, iPad, Mac) — opens FaceTime natively
-- Android and Windows — opens in the browser via WebRTC (no app required)
-
-To hang up a call:
-
-```bash
-curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/leave \
-  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 ### facetime.status_changed
@@ -1021,9 +989,7 @@ curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/leave \
   "status": "answered",
   "isAudio": false,
   "isVideo": true,
-  "isOutgoing": false,
-  "answerUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/answer",
-  "leaveUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/leave"
+  "isOutgoing": false
 }
 ```
 
@@ -1032,12 +998,12 @@ curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/leave \
 | Field | Description |
 |-------|-------------|
 | callUuid | Unique identifier for the call session |
+| caller / address | Phone number or email of the other party. facetime.incoming uses caller; facetime.status_changed uses address |
 | to | Phone number or email of the receiving BlueBubbles instance |
 | isAudio / isVideo | FaceTime Audio: isAudio=true, isVideo=false. FaceTime Video: isAudio=false, isVideo=true |
-| answerUrl | POST to answer and get a shareable FaceTime Link. Requires API key |
-| leaveUrl | POST to hang up. Requires API key |
 | status | Call status: incoming, answered, disconnected, missed, rejected, failed |
 | isOutgoing | Whether the call was initiated by the instance (true) or received (false) |
+| timestamp | Unix epoch milliseconds when the call was detected. Present on facetime.incoming events |
 
 ## Inbound Message Payload
 
@@ -1342,10 +1308,6 @@ Base URL: https://api.textbubbles.com
 ## Webhooks
 - GET /v1/webhooks — Get webhook config
 - PUT /v1/webhooks — Set webhook URL and events
-
-## FaceTime
-- POST /v1/facetime/:callUuid/answer — Answer incoming call
-- POST /v1/facetime/:callUuid/leave — Leave/hang up call
 
 ## System
 - GET /health — Health check (no auth required)
