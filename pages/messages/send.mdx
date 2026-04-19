@@ -186,8 +186,39 @@ By default, messages try iMessage first and fall back to SMS. Customize with the
 }
 ```
 
-- `preference` — ordered list of channels: `"imessage"`, `"sms"`
+- `preference` — ordered list of channels: `"imessage"`, `"sms"`, `"whatsapp"`
 - `fallback` — try the next channel if the first fails (default: `true`)
+
+### WhatsApp
+
+Include `"whatsapp"` in the preference list. The WhatsApp send uses the **same phone number** as your iMessage/SMS line — pairing is per-instance and managed via the admin panel.
+
+```json
+{
+  "to": "+14155551234",
+  "content": { "text": "Hello from WhatsApp!" },
+  "routing": { "preference": ["whatsapp"] }
+}
+```
+
+You can also fall back from WhatsApp to iMessage/SMS:
+
+```json
+{ "routing": { "preference": ["whatsapp", "imessage", "sms"] } }
+```
+
+Send to an existing WhatsApp **group** by passing the group JID as `to`:
+
+```json
+{
+  "to": "120363012345678901@g.us",
+  "content": { "text": "Hi team" },
+  "routing": { "preference": ["whatsapp"] },
+  "mentions": [{ "address": "+14155551234", "start": 0, "length": 3 }]
+}
+```
+
+Mentions are honoured on group sends only and silently dropped on individual chats. iMessage-only fields (`effect`, `messageType: "carousel"`) are dropped on a WhatsApp send. See the [WhatsApp reference](/whatsapp) for capabilities, limitations, and pairing.
 
 ## Unsend a Message
 
