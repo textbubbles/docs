@@ -65,9 +65,5 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 ### Realtime Events
 - GET /v1/events — Server-Sent Events stream of realtime events (same payloads as webhooks)
 
-### FaceTime
-- POST /v1/facetime/:callUuid/answer — Answer incoming call
-- POST /v1/facetime/:callUuid/leave — Leave/hang up call
-
 ### System
 - GET /health — Health check (no auth required)
