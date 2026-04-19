@@ -127,7 +127,9 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 
 ## Voice Memos
 
-To send an audio file as a native iMessage voice-memo bubble (inline player with waveform) instead of a generic file attachment, set `isAudioMessage: true` on the attachment. The audio must be in CAF format (or MP3 — BlueBubbles converts MP3 to CAF server-side). Voice memos are attachment-only — omit `content.text`.
+To send an audio file as a native iMessage voice-memo bubble (inline player with waveform) instead of a generic file attachment, set `isAudioMessage: true` on the attachment. Voice memos are attachment-only — omit `content.text`.
+
+Accepted formats: any audio (MP3, Opus/AAC/PCM in CAF, webm, m4a, ogg, wav, …). The server normalizes non-compatible inputs to Opus-in-CAF — the format iMessage's voice-memo UI can read duration from. MP3 and Opus-in-CAF are forwarded as-is. If you can, encode client-side to MP3 or Opus-in-CAF to skip the extra server transcode.
 
 ```bash
 curl -X POST https://api.textbubbles.com/v1/messages \
@@ -271,7 +273,7 @@ If a message with the same key already exists, the API returns `200 OK` with the
 | `attachments[].data` | string | No | Base64-encoded file data (when type is `base64`) |
 | `attachments[].mimeType` | string | No | MIME type of the attachment |
 | `attachments[].filename` | string | No | Original filename |
-| `attachments[].isAudioMessage` | boolean | No | Render as a native iMessage voice-memo bubble (inline player). Requires CAF audio (or MP3 — BlueBubbles converts it). iMessage only. |
+| `attachments[].isAudioMessage` | boolean | No | Render as a native iMessage voice-memo bubble (inline player). Accepts any audio format — the server transcodes non-compatible inputs (anything except MP3 or Opus-in-CAF) to Opus-in-CAF. iMessage only. |
 | `effect` | string | No | Message effect (iMessage only) |
 | `scheduledAt` | string | No | ISO 8601 datetime for scheduled delivery |
 | `idempotencyKey` | string | No | Unique key for deduplication |
