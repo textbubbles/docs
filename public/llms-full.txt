@@ -1351,7 +1351,7 @@ Base URL: https://api.textbubbles.com
 
 # WhatsApp
 
-WhatsApp is a first-class send/receive channel using the same phone number as the iMessage/SMS line. Pairing is per-instance via QR code. Powered by an unofficial library (Baileys) — works well in practice but no SLA.
+WhatsApp is a first-class send/receive channel using the same phone number as the iMessage/SMS line. Pairing is per-number via QR code or pair-by-code.
 
 ## Routing
 
@@ -1364,16 +1364,16 @@ Or fall back: `["whatsapp", "imessage", "sms"]`. Group sends use `to: "...@g.us"
 ## Capabilities (outbound / inbound)
 
 - text: yes / yes
-- image (≤16 MB): yes / yes (≤512 KB inlined as base64; larger as placeholder)
+- image (≤16 MB): yes / yes
 - video (≤64 MB): yes / yes
 - voice notes (PTT) via `attachments[].isAudioMessage: true`: yes / yes
 - documents (≤100 MB): yes / yes
 - reactions: yes (POST /v1/messages/:id/reactions, type → emoji map) / yes (message.reaction webhook)
-- replies (quoted via replyTo): yes / yes (metadata.whatsapp.quotedExternalId)
+- replies (quoted via replyTo): yes / yes
 - mentions (groups only): yes / yes
-- typing indicators outbound: not yet exposed / yes inbound (typing.indicator webhook)
-- read receipts: outbound mark-as-read not yet exposed; inbound delivery/read tracked via message.delivered/message.read webhooks
-- iMessage `effect`/`carousel`: silently dropped on whatsapp send
+- typing indicators inbound: yes (typing.indicator webhook)
+- delivery + read tracking on outbound: yes (message.delivered / message.read webhooks)
+- iMessage `effect` / `messageType: "carousel"`: silently dropped on whatsapp send
 
 ## Reaction type → emoji
 
@@ -1388,27 +1388,31 @@ Or fall back: `["whatsapp", "imessage", "sms"]`. Group sends use `to: "...@g.us"
 | any other string | passed through verbatim |
 | `-love` etc. | removes the reaction |
 
-## Admin endpoints (internal — proxied to tb-whatsapp)
+## Admin endpoints (per-number pairing & status)
 
 - POST /v1/admin/instances/:id/whatsapp/enable — create session, start QR flow
 - GET /v1/admin/instances/:id/whatsapp/status — { status, jid, lastConnectedAt, ... }
 - GET /v1/admin/instances/:id/whatsapp/qr — { qrCode } raw string
-- POST /v1/admin/instances/:id/whatsapp/disconnect — logout, drop in-memory session
-- DELETE /v1/admin/instances/:id/whatsapp — logout + delete row + zero auth state
+- POST /v1/admin/instances/:id/whatsapp/disconnect
+- DELETE /v1/admin/instances/:id/whatsapp
 - GET /v1/admin/instances/:id/whatsapp/onwhatsapp?phone=+1... — manual capability probe
 - POST /v1/admin/instances/:id/whatsapp/pairing-code — { phoneNumber } → { code } 8-char alternative to QR
 
 ## Phone-number guarantee
 
-The number on the scanned WhatsApp account MUST match the BlueBubbles instance's `phone_number`. Mismatched scans are auto-logged-out with `disconnect_reason: 'phone_number_mismatch'`.
+The number on the scanned WhatsApp account MUST match the registered TextBubbles number. Mismatched scans are rejected automatically.
+
+## Inbound media
+
+Inbound media arrives base64-encoded inline at `metadata.attachments[].dataBase64` for smaller files; very large media may arrive as a metadata-only entry. Treat the presence of `dataBase64` as the signal that the file is fully delivered.
 
 ## Errors
 
-- WHATSAPP_NOT_CONNECTED — session not connected for this instance
-- WHATSAPP_NUMBER_MISMATCH — QR-pair attempt with wrong number
+- WHATSAPP_NOT_CONNECTED — no paired session for this number; pair via the admin panel
+- WHATSAPP_NUMBER_MISMATCH — scanned account number doesn't match the registered number
 - WHATSAPP_RECIPIENT_NOT_REGISTERED — recipient not on WhatsApp
-- WHATSAPP_RATE_LIMITED — WA gateway rate-limited the send
-- WHATSAPP_AUTH_REVOKED — customer revoked the session from "Linked Devices"; re-pair to recover
-- WHATSAPP_UNSUPPORTED_FEATURE — `effect`/`carousel` on a whatsapp-only routing
-- WHATSAPP_MEDIA_TOO_LARGE — exceeds WA limits
-- WHATSAPP_REACTION_FAILED — reaction send failed against WA
+- WHATSAPP_RATE_LIMITED — too many sends in a short window; back off and retry
+- WHATSAPP_AUTH_REVOKED — session was revoked from the customer's phone; re-pair to recover
+- WHATSAPP_UNSUPPORTED_FEATURE — iMessage-only field sent to a whatsapp-only routing
+- WHATSAPP_MEDIA_TOO_LARGE — exceeds WhatsApp's size limits
+- WHATSAPP_REACTION_FAILED — reaction could not be delivered

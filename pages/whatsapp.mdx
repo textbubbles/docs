@@ -1,64 +1,61 @@
 # WhatsApp
 
-TextBubbles ships WhatsApp as a first-class send/receive channel alongside iMessage and SMS. WhatsApp uses the **same phone number** as your existing iMessage/SMS line — one WhatsApp session per BlueBubbles instance, paired via QR code.
-
-> **Beta**: WhatsApp uses an unofficial library ([Baileys](https://github.com/WhiskeySockets/Baileys)). It works well in practice but does not carry an SLA and your account could theoretically be flagged by WhatsApp. For production-critical traffic, use iMessage/SMS as primary.
+TextBubbles supports **WhatsApp** as a first-class send/receive channel alongside iMessage and SMS. WhatsApp uses the **same phone number** as your existing iMessage/SMS line — one paired WhatsApp account per number.
 
 ## Capabilities
 
 | Feature | Outbound | Inbound |
 |---|---|---|
 | Plain text | ✅ | ✅ |
-| Image / video | ✅ (16 MB / 64 MB cap) | ✅ (≤512 KB inline; larger as placeholder, [see below](#inbound-media-limits)) |
-| Voice notes (PTT) | ✅ via `attachments[].isAudioMessage: true` | ✅ |
-| Documents | ✅ (100 MB cap) | ✅ |
+| Image (≤16 MB) | ✅ | ✅ |
+| Video (≤64 MB) | ✅ | ✅ |
+| Voice notes (PTT) via `attachments[].isAudioMessage: true` | ✅ | ✅ |
+| Documents (≤100 MB) | ✅ | ✅ |
 | Reactions | ✅ ([`POST /v1/messages/:id/reactions`](#reactions)) | ✅ via `message.reaction` webhook |
-| Replies (quoted) | ✅ via `replyTo` | ✅ via `metadata.whatsapp.quotedExternalId` |
+| Replies (quoted) via `replyTo` | ✅ | ✅ |
 | Mentions in groups | ✅ | ✅ |
-| Send to existing groups | ✅ via `to: "...@g.us"` | ✅ |
-| Typing indicators | Not yet exposed via public API | ✅ via `typing.indicator` webhook |
-| Read receipts (mark inbound read) | Not yet exposed via public API | ✅ — fan sees blue ticks |
-| Delivery + read tracking on outbound | ✅ via `message.delivered` / `message.read` webhooks | n/a |
-| iMessage `effect` / `carousel` | Silently dropped (logged) | n/a |
-| Group create / add / remove | ❌ v2 | n/a |
-| Stories / status / polls / view-once / stickers | ❌ | ❌ |
+| Send to existing groups via `to: "...@g.us"` | ✅ | ✅ |
+| Typing indicators | — | ✅ via `typing.indicator` webhook |
+| Read receipts on outbound (delivered/read) | ✅ via `message.delivered` / `message.read` webhooks | n/a |
+| iMessage-only fields (`effect`, `messageType: "carousel"`) | dropped | n/a |
+| Group create / add / remove participants | not supported | not supported |
 
 ## Pairing a number
 
-Pairing creates a `whatsapp_instances` row tied 1:1 to a BlueBubbles instance and links the customer's WhatsApp account to your TextBubbles instance. The phone number on the WhatsApp account **must match** the BlueBubbles instance's number — mismatched scans are rejected automatically.
+Pairing links your customer's WhatsApp account to a TextBubbles number. The phone number on the WhatsApp account **must match** the number on file — mismatched scans are rejected automatically.
 
-### Via admin panel (recommended)
+### Via admin panel
 
 1. Open **Instances** in the admin panel
-2. Click the **WhatsApp** button on the instance row
+2. Click **WhatsApp** on the row for the number you want to pair
 3. Click **Enable WhatsApp** — a QR code appears
 4. On the customer's phone: WhatsApp → Settings → Linked Devices → Link a Device → scan
-5. Page polls automatically; flips to **Connected** with the JID once paired
+5. The page polls automatically and flips to **Connected** once paired
 
 ### Via API
 
 ```bash
 # 1. Create the session and start QR flow
 curl -X POST -H "Authorization: Bearer $ADMIN_API_KEY" \
-  https://api.textbubbles.com/v1/admin/instances/<bb_instance_id>/whatsapp/enable
+  https://api.textbubbles.com/v1/admin/instances/<instance_id>/whatsapp/enable
 
 # 2. Poll for the QR string (raw — render with any QR library)
 curl -H "Authorization: Bearer $ADMIN_API_KEY" \
-  https://api.textbubbles.com/v1/admin/instances/<bb_instance_id>/whatsapp/qr
+  https://api.textbubbles.com/v1/admin/instances/<instance_id>/whatsapp/qr
 
 # 3. Confirm the pair
 curl -H "Authorization: Bearer $ADMIN_API_KEY" \
-  https://api.textbubbles.com/v1/admin/instances/<bb_instance_id>/whatsapp/status
+  https://api.textbubbles.com/v1/admin/instances/<instance_id>/whatsapp/status
 ```
 
 ### Pair-by-code (no QR)
 
-If a QR display isn't available (headless ops, remote pairing), request an 8-character code instead:
+If a QR display isn't available, request an 8-character code instead:
 
 ```bash
 curl -X POST -H "Authorization: Bearer $ADMIN_API_KEY" -H "Content-Type: application/json" \
   -d '{"phoneNumber":"+15551234567"}' \
-  https://api.textbubbles.com/v1/admin/instances/<bb_instance_id>/whatsapp/pairing-code
+  https://api.textbubbles.com/v1/admin/instances/<instance_id>/whatsapp/pairing-code
 ```
 
 The customer types the returned code into WhatsApp's "Link a Device" flow.
@@ -69,9 +66,9 @@ See [Send Messages](/messages/send#whatsapp) for the full request shape. The `ro
 
 ## Reactions
 
-`POST /v1/messages/:id/reactions` works the same as for iMessage; the same `type` values map to emoji on WhatsApp:
+`POST /v1/messages/:id/reactions` works the same as for iMessage; the same `type` values apply on WhatsApp:
 
-| iMessage `type` | WhatsApp emoji |
+| `type` | WhatsApp emoji |
 |---|---|
 | `love` | ❤️ |
 | `like` | 👍 |
@@ -90,42 +87,25 @@ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/j
 
 ## Inbound
 
-Inbound WhatsApp messages, reactions, typing, and delivery/read updates flow through your registered webhook the same way iMessage events do. Each event includes `"channel": "whatsapp"` and a `customerId`.
+Inbound WhatsApp messages, reactions, typing indicators, and delivery/read updates flow through your registered webhook the same way iMessage events do. Each event includes `"channel": "whatsapp"` and a `customerId`.
 
-### Inbound media limits
+Inbound media currently arrives base64-encoded inline in the webhook payload at `metadata.attachments[].dataBase64` for smaller files; very large media may arrive as a metadata-only entry. Treat the presence of `dataBase64` as the signal that the file is fully delivered.
 
-For v1, inbound media is **inlined as base64** in `metadata.attachments[].dataBase64` only when the file is ≤512 KB. Larger media returns a placeholder:
+## Limitations
 
-```json
-{
-  "metadata": {
-    "attachments": [{
-      "mimeType": "image/jpeg",
-      "totalBytes": 2_400_000,
-      "note": "media exceeds inline threshold; full download requires server-side storage (not implemented in v1)"
-    }]
-  }
-}
-```
-
-Persistent storage for larger inbound media is on the roadmap.
-
-## Limitations and gotchas
-
-- **One WhatsApp account per number.** Pairing a TextBubbles instance to a WA account uses the "Linked Devices" slot; revoking the link from the customer's phone disconnects the session and requires re-pairing.
-- **No multi-device sharing.** A single Baileys session per number; you can't run a second device against the same WA account.
-- **TOS risk.** Baileys is unofficial. Bulk/templated automation increases the chance WhatsApp flags the account. Use measured, conversation-style messaging.
-- **Restart reconnect.** When `tb-whatsapp` restarts, every session reconnects with jitter (≈250 ms apart). During the window, sends queue normally and inbound is briefly missed.
+- **One WhatsApp account per TextBubbles number.** Pairing uses the WhatsApp "Linked Devices" slot; revoking the link from the customer's phone disconnects the session and requires re-pairing.
+- **Group operations.** Sending into existing groups (and replying / mentioning within them) is supported; creating groups or managing membership through the API is not.
+- **iMessage-specific features** (`effect`, `messageType: "carousel"`) are silently dropped on a WhatsApp-only routing.
 
 ## Errors
 
 | Error code | Meaning |
 |---|---|
-| `WHATSAPP_NOT_CONNECTED` | Session not connected for this instance. Check `/whatsapp/status` and re-pair if needed. |
-| `WHATSAPP_NUMBER_MISMATCH` | QR-pair attempt scanned a different number than the BlueBubbles instance's. |
-| `WHATSAPP_RECIPIENT_NOT_REGISTERED` | The recipient phone is not on WhatsApp. |
-| `WHATSAPP_RATE_LIMITED` | WhatsApp gateway rate-limited the send. |
-| `WHATSAPP_AUTH_REVOKED` | The customer revoked our session from "Linked Devices". Re-pair to recover. |
-| `WHATSAPP_UNSUPPORTED_FEATURE` | iMessage-only field (`effect`, `messageType: carousel`) sent to a WhatsApp-only routing. |
-| `WHATSAPP_MEDIA_TOO_LARGE` | Attachment exceeds WhatsApp limits (16 MB image / 64 MB video / 100 MB doc). |
-| `WHATSAPP_REACTION_FAILED` | Reaction send failed against the WhatsApp gateway. |
+| `WHATSAPP_NOT_CONNECTED` | No paired WhatsApp session for this number. Pair via the admin panel. |
+| `WHATSAPP_NUMBER_MISMATCH` | The scanned WhatsApp account's number doesn't match the registered TextBubbles number. |
+| `WHATSAPP_RECIPIENT_NOT_REGISTERED` | The recipient phone number is not on WhatsApp. |
+| `WHATSAPP_RATE_LIMITED` | Too many sends in a short window. Back off and retry. |
+| `WHATSAPP_AUTH_REVOKED` | The session was revoked from the customer's phone. Re-pair to recover. |
+| `WHATSAPP_UNSUPPORTED_FEATURE` | An iMessage-only field was sent to a WhatsApp-only routing. |
+| `WHATSAPP_MEDIA_TOO_LARGE` | Attachment exceeds WhatsApp's size limits (16 MB image / 64 MB video / 100 MB document). |
+| `WHATSAPP_REACTION_FAILED` | The reaction could not be delivered. |
