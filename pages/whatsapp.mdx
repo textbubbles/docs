@@ -99,13 +99,23 @@ Inbound media currently arrives base64-encoded inline in the webhook payload at 
 
 ## Errors
 
+Send-path errors surface on the message as `errorCode` (pull via `GET /v1/messages/:id`) and on `message.failed` webhook events.
+
 | Error code | Meaning |
 |---|---|
+| `NO_CHANNEL_AVAILABLE` | None of the channels in `routing.preference` are available for this recipient — e.g. `{"preference":["whatsapp"], "fallback":false}` to a number not on WhatsApp. Include `"imessage"` / `"sms"` in the preference list (with `fallback: true`) if you want graceful degradation. |
 | `WHATSAPP_NOT_CONNECTED` | No paired WhatsApp session for this number. Pair via the admin panel. |
-| `WHATSAPP_NUMBER_MISMATCH` | The scanned WhatsApp account's number doesn't match the registered TextBubbles number. |
-| `WHATSAPP_RECIPIENT_NOT_REGISTERED` | The recipient phone number is not on WhatsApp. |
-| `WHATSAPP_RATE_LIMITED` | Too many sends in a short window. Back off and retry. |
-| `WHATSAPP_AUTH_REVOKED` | The session was revoked from the customer's phone. Re-pair to recover. |
-| `WHATSAPP_UNSUPPORTED_FEATURE` | An iMessage-only field was sent to a WhatsApp-only routing. |
+| `WHATSAPP_SEND_FAILED` | The WhatsApp send failed for an unexpected reason (transient upstream error, attachment URL unfetchable, etc.). Safe to retry. |
 | `WHATSAPP_MEDIA_TOO_LARGE` | Attachment exceeds WhatsApp's size limits (16 MB image / 64 MB video / 100 MB document). |
 | `WHATSAPP_REACTION_FAILED` | The reaction could not be delivered. |
+| `MISSING_WHATSAPP_JID` | Returned by `POST /v1/messages/:id/reactions` when the target message has no stored WhatsApp JID — should be rare; contact support if you see it on a message your customer sent through the API. |
+
+### Session-level states (not send errors)
+
+The following are **session disconnect reasons** surfaced on the WhatsApp instance's status (via `GET /v1/admin/instances/:id/whatsapp/status`), not on individual sends. Inspect `disconnectReason`:
+
+| Value | Meaning |
+|---|---|
+| `phone_number_mismatch` | The scanned WhatsApp account's number doesn't match the TextBubbles number this instance is registered to. The session was logged out automatically; re-pair with an account on the correct number. |
+| `auth_revoked` | The customer removed the textbubbles link from their phone's WhatsApp → Linked Devices. Re-enable to start a fresh QR flow. |
+| `close_<code>` | Transient close — the service will attempt to reconnect automatically. |

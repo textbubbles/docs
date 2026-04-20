@@ -1408,11 +1408,17 @@ Inbound media arrives base64-encoded inline at `metadata.attachments[].dataBase6
 
 ## Errors
 
-- WHATSAPP_NOT_CONNECTED — no paired session for this number; pair via the admin panel
-- WHATSAPP_NUMBER_MISMATCH — scanned account number doesn't match the registered number
-- WHATSAPP_RECIPIENT_NOT_REGISTERED — recipient not on WhatsApp
-- WHATSAPP_RATE_LIMITED — too many sends in a short window; back off and retry
-- WHATSAPP_AUTH_REVOKED — session was revoked from the customer's phone; re-pair to recover
-- WHATSAPP_UNSUPPORTED_FEATURE — iMessage-only field sent to a whatsapp-only routing
-- WHATSAPP_MEDIA_TOO_LARGE — exceeds WhatsApp's size limits
+Send-path error codes surface on the message as `errorCode` (GET /v1/messages/:id) and on message.failed webhook events.
+
+- NO_CHANNEL_AVAILABLE — none of the channels in routing.preference are available for this recipient (e.g. {"preference":["whatsapp"], "fallback":false} to a number not on WhatsApp). Include "imessage" or "sms" in the preference with fallback:true for graceful degradation.
+- WHATSAPP_NOT_CONNECTED — no paired WhatsApp session for this number. Pair via the admin panel.
+- WHATSAPP_SEND_FAILED — generic send failure (transient upstream, unfetchable attachment URL, etc). Safe to retry.
+- WHATSAPP_MEDIA_TOO_LARGE — attachment exceeds WhatsApp's size limits (16 MB image / 64 MB video / 100 MB document)
 - WHATSAPP_REACTION_FAILED — reaction could not be delivered
+- MISSING_WHATSAPP_JID — POST /v1/messages/:id/reactions target has no stored WhatsApp JID; should be rare for messages sent through the API
+
+Session-level disconnect reasons (surfaced on GET /v1/admin/instances/:id/whatsapp/status as disconnectReason, NOT on individual sends):
+
+- phone_number_mismatch — the scanned account's number doesn't match the TextBubbles number this instance is registered to; auto-logged-out, re-pair with the correct account
+- auth_revoked — the customer removed the textbubbles link from WhatsApp → Linked Devices; re-enable for a fresh QR
+- close_<code> — transient close; the service reconnects automatically
