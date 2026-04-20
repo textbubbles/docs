@@ -934,16 +934,17 @@ Every webhook event follows this structure:
 |-------|-------------|
 | message.queued | Message accepted and queued for delivery |
 | message.sent | Message sent to the carrier/provider |
-| message.delivered | Delivery confirmed by the recipient's device |
-| message.read | Read receipt received (iMessage only) |
+| message.delivered | Delivery confirmed by the recipient's device (iMessage, WhatsApp) |
+| message.read | Read receipt received (iMessage and WhatsApp — WhatsApp only when the recipient has read receipts enabled) |
 | message.failed | Message delivery failed |
 | message.fallback | Fallback triggered (e.g., iMessage to SMS) |
 | message.inbound | Inbound message received |
 | message.reaction | Tapback or emoji reaction added or removed |
 | message.unsent | Message was unsent/retracted |
-| message.edited | Message was successfully edited |
-| message.edit_failed | Message edit failed |
+| message.edited | Message was successfully edited (iMessage only) |
+| message.edit_failed | Message edit failed (iMessage only) |
 | message.deleted | Message was soft-deleted |
+| typing.indicator | Recipient is typing (WhatsApp only) |
 
 ## Scheduled Message Events
 
