@@ -937,7 +937,7 @@ Every webhook event follows this structure:
 | message.sent | Message sent to the carrier/provider |
 | message.delivered | Delivery confirmed by the recipient's device |
 | message.read | Read receipt received (iMessage only) |
-| message.failed | Message delivery failed |
+| message.failed | Message delivery failed. Payload includes `errorCode` when a provider code is known (e.g. `imessage_error_4` for Apple "Not Delivered"). iMessage failures may arrive seconds to minutes after `message.sent` because the provider does not push delivery-failure events in real time; we detect them by polling. |
 | message.fallback | Fallback triggered (e.g., iMessage to SMS) |
 | message.inbound | Inbound message received |
 | message.reaction | Tapback or emoji reaction added or removed |

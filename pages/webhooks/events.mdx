@@ -138,8 +138,27 @@ Delivery-status events (`message.sent`, `message.delivered`, `message.read`, `me
 | `externalMessageId` | Provider-level GUID |
 | `channel` | `imessage` or `sms` |
 | `readAt` | ISO-8601 timestamp (present on `message.read` only) |
+| `errorCode` | Provider-level error code (present on `message.failed` only). For iMessage this is `imessage_error_N` where `N` is Apple's raw error flag from `chat.db`. The most common value is `imessage_error_4` ("Not Delivered" — Apple declined to deliver, usually because the recipient's device was unreachable for an extended period or because Apple flagged the sender account). Absent when the failure was detected without an upstream code. |
 
 > `message.read` is iMessage-only and is only delivered if the recipient has read receipts enabled on their device. It is a **distinct** event from `message.delivered` — do not collapse them when tracking delivery state.
+
+### `message.failed` payload example
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "message.failed",
+  "timestamp": "2026-04-21T14:36:30.000Z",
+  "data": {
+    "messageId": "msg_a7ddd7cf-2d33-4f64-b36c-c0c56c8c0dc0",
+    "externalMessageId": "43E6057F-BED4-4CD3-9D0B-684AD781B344",
+    "channel": "imessage",
+    "errorCode": "imessage_error_4"
+  }
+}
+```
+
+iMessage `message.failed` events may arrive seconds to minutes after `message.sent`. The provider does not push delivery-failure state changes in real time, so we detect them via a reconciler that polls every minute for recent sends that have not yet confirmed delivery.
 
 ## Inbound Message Payload
 
