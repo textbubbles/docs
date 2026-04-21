@@ -941,10 +941,22 @@ Every webhook event follows this structure:
 | message.fallback | Fallback triggered (e.g., iMessage to SMS) |
 | message.inbound | Inbound message received |
 | message.reaction | Tapback or emoji reaction added or removed |
+| message.audio_kept | Contact tapped "Keep" on a voice note you sent (iMessage only) |
 | message.unsent | Message was unsent/retracted |
 | message.edited | Message was successfully edited |
 | message.edit_failed | Message edit failed |
 | message.deleted | Message was soft-deleted |
+
+## Chat Events
+
+Fired when a contact performs a chat-state action (iMessage group chats).
+
+| Event | Description |
+|-------|-------------|
+| chat.participant.added | Participant added to a group chat |
+| chat.participant.left | Participant removed from (or left) a group chat |
+| chat.title.changed | Group chat title set or changed |
+| chat.photo.changed | Group chat photo updated |
 
 ## Scheduled Message Events
 
@@ -1096,6 +1108,104 @@ Emoji reactions (iOS 17+):
 | reaction.targetMessageId | Internal message ID (null if not found) |
 | reaction.targetExternalId | BlueBubbles GUID of original message |
 | reaction.content | Human-readable description (null for emoji) |
+
+## Audio Kept Events
+
+Fired when a contact taps "Keep" on a voice note you sent. iMessage auto-deletes voice notes after two minutes unless the recipient keeps them — tapping Keep is an explicit retention signal, useful as a lightweight engagement event.
+
+```json
+{
+  "id": "evt_audio_kept_123",
+  "type": "message.audio_kept",
+  "timestamp": "2026-04-21T09:17:46.007Z",
+  "data": {
+    "externalMessageId": "D6ADF04F-EF82-45F6-BF46-CF7F2B20C9AE",
+    "targetMessageId": "msg_cdf628ad-3ed3-49aa-a10f-a0ea19c9220c",
+    "targetExternalId": "4DE4DB87-1681-4DC7-A77B-3967BCA74BF7",
+    "from": "+14155551234",
+    "to": "+13105550199",
+    "channel": "imessage"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| externalMessageId | BlueBubbles GUID of the Keep system event itself |
+| targetMessageId | Internal message ID of the kept audio. null if the audio predates our retention or was sent through a different BB instance |
+| targetExternalId | BlueBubbles GUID of the kept audio — always populated |
+| from | Contact who tapped Keep |
+| to | Instance phone number the audio was sent from |
+
+## Chat Event Payloads
+
+All four chat events share the same envelope: `externalMessageId` (BB GUID of the chat.db system row), `chatId` (BB chat identifier), `actor` (who performed the action), `to` (instance phone), `channel: "imessage"`.
+
+### chat.participant.added / chat.participant.left
+
+```json
+{
+  "id": "evt_participant_added",
+  "type": "chat.participant.added",
+  "timestamp": "2026-04-21T10:00:00.000Z",
+  "data": {
+    "externalMessageId": "<system-event-guid>",
+    "chatId": "iMessage;+;chat1234567890",
+    "participant": "+14155551235",
+    "actor": "+14155551234",
+    "to": "+13105550199",
+    "channel": "imessage"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| chatId | BlueBubbles chat identifier |
+| participant | Contact added to (or removed from) the chat |
+| actor | Contact who performed the action |
+
+### chat.title.changed
+
+```json
+{
+  "id": "evt_title_changed",
+  "type": "chat.title.changed",
+  "timestamp": "2026-04-21T10:05:00.000Z",
+  "data": {
+    "externalMessageId": "<system-event-guid>",
+    "chatId": "iMessage;+;chat1234567890",
+    "title": "Weekend plans",
+    "actor": "+14155551234",
+    "to": "+13105550199",
+    "channel": "imessage"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| title | The new chat title |
+| actor | Contact who changed the title |
+
+### chat.photo.changed
+
+```json
+{
+  "id": "evt_photo_changed",
+  "type": "chat.photo.changed",
+  "timestamp": "2026-04-21T10:10:00.000Z",
+  "data": {
+    "externalMessageId": "<system-event-guid>",
+    "chatId": "iMessage;+;chat1234567890",
+    "actor": "+14155551234",
+    "to": "+13105550199",
+    "channel": "imessage"
+  }
+}
+```
+
+The event does not include the new photo — retrieve it through the chat resource.
 
 ---
 
