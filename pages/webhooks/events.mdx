@@ -41,6 +41,7 @@ Every webhook event follows this structure:
 | `message.edit_failed` | Message edit failed |
 | `message.deleted` | Message was soft-deleted |
 | `typing.indicator` | Recipient is typing (WhatsApp only; see [Typing Indicator](#typing-indicator) below) |
+| `whatsapp.status` | WhatsApp session changed pairing state (`qr_pending` / `connecting` / `connected` / `disconnected`). Realtime-only — not sent to webhook URLs; subscribe via the [Realtime/SSE stream](#realtime-sse-stream) |
 
 ## Scheduled Message Events
 
@@ -269,6 +270,35 @@ WhatsApp contacts emit a typing event while composing a message. The webhook sur
 | `customerId` | string | Customer the event belongs to |
 
 **Recommended consumer behavior:** treat each `typing.indicator` event as "show a typing bubble for ~5 seconds." WhatsApp re-emits the event every few seconds while the contact keeps typing, so the bubble stays on as long as they continue. When emissions stop, the bubble times out naturally.
+
+## WhatsApp Session Status
+
+`whatsapp.status` fires every time a WhatsApp session's pairing state changes — useful for driving a live pairing UI without polling `GET /v1/whatsapp/numbers/:phoneNumber/status`. Delivered on the Realtime/SSE stream only (not to webhook URLs).
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "whatsapp.status",
+  "timestamp": "2026-04-20T20:40:00.000Z",
+  "data": {
+    "phoneNumber": "+16282895642",
+    "status": "connected",
+    "jid": "16282895642:2@s.whatsapp.net",
+    "customerId": "4b02f4ab-35d9-444a-b0ee-4c2a3edd347c"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `phoneNumber` | string | The TextBubbles number whose session changed |
+| `status` | string | `qr_pending` / `connecting` / `connected` / `disconnected` |
+| `qrCode` | string \| null | Present when `status` is `qr_pending` — raw QR string, render with any library |
+| `jid` | string \| null | Present when `status` is `connected` — the paired WhatsApp JID (usually `<phone>:<device>@s.whatsapp.net`) |
+| `disconnectReason` | string \| null | Present when `status` is `disconnected` — `auth_revoked`, `phone_number_mismatch`, or `close_<code>` |
+| `customerId` | string | Customer the session belongs to |
+
+Subscribe from the textbubbles UI via Supabase Realtime, or from any SSE-capable client via `GET /v1/events?events=whatsapp.status`.
 
 ## Reaction Events
 

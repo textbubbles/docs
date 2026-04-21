@@ -22,43 +22,133 @@ TextBubbles supports **WhatsApp** as a first-class send/receive channel alongsid
 
 ## Pairing a number
 
-Pairing links your customer's WhatsApp account to a TextBubbles number. The phone number on the WhatsApp account **must match** the number on file — mismatched scans are rejected automatically.
+Pairing links a WhatsApp account to one of your TextBubbles numbers. The phone number on the WhatsApp account **must match** the TextBubbles number — mismatched scans are rejected automatically.
 
-### Via admin panel
+You can pair from the textbubbles UI (Settings → WhatsApp) or directly from the API.
 
-1. Open **Instances** in the admin panel
-2. Click **WhatsApp** on the row for the number you want to pair
-3. Click **Enable WhatsApp** — a QR code appears
-4. On the customer's phone: WhatsApp → Settings → Linked Devices → Link a Device → scan
-5. The page polls automatically and flips to **Connected** once paired
+### API reference
 
-### Via API
+Every endpoint is scoped to numbers your API key owns; requests for a number that isn't linked to your customer return `403 NUMBER_NOT_OWNED`. Phone numbers in the path accept E.164 with or without the leading `+` (`+16282895642` and `16282895642` are both valid).
+
+**List your numbers with current WA status**
 
 ```bash
+curl -H "Authorization: Bearer $TB_KEY" https://api.textbubbles.com/v1/whatsapp
+```
+
+Returns an array like:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "phoneNumber": "+16282895642",
+      "instanceName": "Internal Instance",
+      "isDefault": true,
+      "whatsapp": {
+        "status": "connected",
+        "jid": "16282895642:2@s.whatsapp.net",
+        "lastConnectedAt": "2026-04-20T20:39:55.000Z",
+        "lastDisconnectedAt": null,
+        "disconnectReason": null
+      }
+    }
+  ]
+}
+```
+
+`whatsapp.status` is one of `not_enabled`, `disconnected`, `connecting`, `qr_pending`, `connected`.
+
+**Start pairing (QR flow)**
+
+```bash
+NUM="+16282895642"
 # 1. Create the session and start QR flow
-curl -X POST -H "Authorization: Bearer $ADMIN_API_KEY" \
-  https://api.textbubbles.com/v1/admin/instances/<instance_id>/whatsapp/enable
+curl -X POST -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/enable"
 
-# 2. Poll for the QR string (raw — render with any QR library)
-curl -H "Authorization: Bearer $ADMIN_API_KEY" \
-  https://api.textbubbles.com/v1/admin/instances/<instance_id>/whatsapp/qr
+# 2. Poll for the raw QR string (render with any QR library)
+curl -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/qr"
 
-# 3. Confirm the pair
-curl -H "Authorization: Bearer $ADMIN_API_KEY" \
-  https://api.textbubbles.com/v1/admin/instances/<instance_id>/whatsapp/status
+# 3. On the phone for this number: WhatsApp → Settings → Linked Devices → Link a Device → scan
+
+# 4. Confirm the pair
+curl -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/status"
 ```
 
-### Pair-by-code (no QR)
+Rather than polling `/status`, subscribe to the `whatsapp.status` Realtime event (see [Webhooks & Events](/webhooks/events)) for a push update on every transition.
 
-If a QR display isn't available, request an 8-character code instead:
+**Pair-by-code (no QR display)**
 
 ```bash
-curl -X POST -H "Authorization: Bearer $ADMIN_API_KEY" -H "Content-Type: application/json" \
-  -d '{"phoneNumber":"+15551234567"}' \
-  https://api.textbubbles.com/v1/admin/instances/<instance_id>/whatsapp/pairing-code
+curl -X POST -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/pairing-code"
 ```
 
-The customer types the returned code into WhatsApp's "Link a Device" flow.
+Returns an 8-character code. On the phone, choose "Link with phone number instead" during the **Link a Device** flow and type the code. By default the pairing code is issued for the owned number; pass a different `phoneNumber` in the body to issue for a different device (rare).
+
+**Disconnect / remove**
+
+```bash
+# Stop the live session but keep credentials (quick re-connect later)
+curl -X POST -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/disconnect"
+
+# Permanently remove the session — credentials are deleted, next pair requires a fresh QR
+curl -X DELETE -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM"
+```
+
+**Check whether a recipient is on WhatsApp**
+
+```bash
+curl -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/check?phone=+14155551234"
+```
+
+Returns `{ exists: boolean, jid?: string }`. Useful to confirm reachability before sending with `routing.preference: ["whatsapp"]` and `fallback: false`.
+
+### Signing up for WhatsApp on a TextBubbles number
+
+If this number doesn't yet have a WhatsApp account, you'll first register one before you can link it:
+
+1. Install WhatsApp on a phone (any iOS / Android device you can keep paired — this is the device that becomes the account's home).
+2. In WhatsApp, enter the TextBubbles number when prompted.
+3. WhatsApp sends a verification SMS to that number — which arrives in your TextBubbles inbox.
+4. Retrieve the code (most easily via the endpoint below), type it into WhatsApp, and the account is created.
+5. Once the account exists, follow the [pairing flow](#api-reference) above to link TextBubbles as a device.
+
+**Surfacing the verification SMS code**
+
+```bash
+curl -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/signup-codes"
+```
+
+Scans the last 15 minutes of inbound messages to this number for anything matching WhatsApp's verification SMS format and returns the extracted codes:
+
+```json
+{
+  "success": true,
+  "data": {
+    "windowMinutes": 15,
+    "codes": [
+      {
+        "code": "123456",
+        "messageId": "msg_xyz",
+        "from": "+15555550000",
+        "channel": "sms",
+        "receivedAt": "2026-04-20T21:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+The detector is deliberately conservative — it matches WhatsApp's specific "`Your WhatsApp code: XXX-XXX`" shape so unrelated inbound messages (Uber OTPs, conversation fragments with numbers) don't show up here.
 
 ## Sending
 
