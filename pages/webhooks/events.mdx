@@ -31,7 +31,7 @@ Every webhook event follows this structure:
 | `message.queued` | Message accepted and queued for delivery |
 | `message.sent` | Message sent to the carrier/provider |
 | `message.delivered` | Delivery confirmed by the recipient's device |
-| `message.read` | Read receipt received (iMessage only) |
+| `message.read` | Read receipt received (iMessage and WhatsApp — WhatsApp only when the recipient has read receipts enabled) |
 | `message.failed` | Message delivery failed |
 | `message.fallback` | Fallback triggered (e.g., iMessage to SMS) |
 | `message.inbound` | Inbound message received from a contact |
@@ -41,6 +41,8 @@ Every webhook event follows this structure:
 | `message.edited` | Message was successfully edited |
 | `message.edit_failed` | Message edit failed |
 | `message.deleted` | Message was soft-deleted |
+| `typing.indicator` | Recipient is typing (WhatsApp only; see [Typing Indicator](#typing-indicator) below) |
+| `whatsapp.status` | WhatsApp session changed pairing state (`qr_pending` / `connecting` / `connected` / `disconnected`). Realtime-only — not sent to webhook URLs; subscribe via the [Realtime/SSE stream](#realtime-sse-stream) |
 
 ## Chat Events
 
@@ -136,10 +138,10 @@ Delivery-status events (`message.sent`, `message.delivered`, `message.read`, `me
 |-------|-------------|
 | `messageId` | Internal TextBubbles message ID |
 | `externalMessageId` | Provider-level GUID |
-| `channel` | `imessage` or `sms` |
+| `channel` | `imessage`, `sms`, or `whatsapp` |
 | `readAt` | ISO-8601 timestamp (present on `message.read` only) |
 
-> `message.read` is iMessage-only and is only delivered if the recipient has read receipts enabled on their device. It is a **distinct** event from `message.delivered` — do not collapse them when tracking delivery state.
+> `message.read` fires for iMessage and WhatsApp when the recipient has read receipts enabled on their device. It is a **distinct** event from `message.delivered` — do not collapse them when tracking delivery state. SMS does not emit `message.read`.
 
 ## Inbound Message Payload
 
@@ -174,20 +176,143 @@ Delivery-status events (`message.sent`, `message.delivered`, `message.read`, `me
 | Field | Type | Description |
 |-------|------|-------------|
 | `messageId` | string | Internal TextBubbles message ID. Use this when calling endpoints like `POST /v1/messages/:id/reactions` or `PUT /v1/messages/:id` in response to the inbound message |
-| `externalMessageId` | string | Provider-level identifier (iMessage GUID). Use for correlating with provider logs |
-| `from` | string | Sender's phone number (E.164) or email |
+| `externalMessageId` | string | Provider-level identifier (iMessage GUID or WhatsApp message id) — use for correlating with provider logs |
+| `from` | string | Sender's phone number in E.164 (or email for iMessage email addresses). For WhatsApp senders on WA's LID privacy mode, TextBubbles resolves the LID to the real E.164 number before emitting the webhook |
 | `to` | string | Receiving phone number or email (identifies which instance received the message) |
 | `text` | string | Message text content |
-| `channel` | string | Channel the message was received on (`imessage` or `sms`) |
-| `parentMessageId` | string \| null | The internal messageId this inbound message is replying to (thread reply), or `null` |
-| `attachments` | array | List of file attachments on the message (empty array if none) |
-| `attachments[].guid` | string | Unique identifier for the attachment |
+| `channel` | string | Channel the message was received on: `imessage`, `sms`, or `whatsapp` |
+| `parentMessageId` | string \| null | Internal `messageId` this inbound is replying to. Set for iMessage thread replies **and** WhatsApp quoted replies — a consumer that reads only `parentMessageId` works on both channels |
+| `replyTo` | object \| absent | **WhatsApp only.** Provider-level detail about the quoted parent — same internal `messageId` as `parentMessageId`, plus the WhatsApp `externalMessageId` for correlating with WA-indexed stores. Omit if the inbound was not a quoted reply |
+| `attachments` | array | List of file attachments on the message (empty array if none). **iMessage** entries include a pre-signed `downloadUrl`; **WhatsApp** entries instead inline the bytes as `dataBase64` when small enough |
+| `attachments[].guid` | string | Unique identifier for the attachment (iMessage) |
 | `attachments[].mimeType` | string | MIME type of the file (e.g., `image/jpeg`, `video/mp4`, `audio/aac`) |
 | `attachments[].filename` | string | Original filename |
 | `attachments[].totalBytes` | number | File size in bytes |
-| `attachments[].downloadUrl` | string | Pre-signed URL to download the attachment. Time-limited (1 hour) and self-authenticated — no API key required. Fetch directly via GET request |
+| `attachments[].downloadUrl` | string | **iMessage.** Pre-signed URL to download the attachment. Time-limited (1 hour) and self-authenticated — no API key required. Fetch directly via GET request |
+| `attachments[].dataBase64` | string | **WhatsApp.** Base64-encoded file bytes for smaller attachments. Very large media may arrive as a metadata-only entry without `dataBase64` — the presence of `dataBase64` signals the file is fully delivered |
+| `otp` | object \| absent | Present when TextBubbles detected a 2FA / verification code in the inbound body (WhatsApp signup, bank OTP, etc.). See [OTP detection](#otp-detection) below |
 
 > **Replying to inbound messages:** always use `messageId` (internal), not `externalMessageId`, when invoking TextBubbles API endpoints. For example, to react to the inbound message above, `POST /v1/messages/msg_xyz789/reactions`.
+
+### Example: WhatsApp quoted reply
+
+When a contact quote-replies to a message you sent, the webhook surfaces the parent reference so you don't need to index `externalMessageId`s yourself:
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "message.inbound",
+  "timestamp": "2026-04-20T20:44:43.000Z",
+  "data": {
+    "messageId": "msg_cad993d1-13f4-47e5-af60-b926d142e8f9",
+    "externalMessageId": "3A7D053CB47169B2734B",
+    "from": "+14155551234",
+    "to": "+16282895642",
+    "text": "Reply",
+    "channel": "whatsapp",
+    "customerId": "4b02f4ab-35d9-444a-b0ee-4c2a3edd347c",
+    "replyTo": {
+      "messageId": "msg_6d8ef255-7e5a-40ad-8cc2-4816cf9b039d",
+      "externalMessageId": "3EB0E921E1F353BB23A1B8"
+    }
+  }
+}
+```
+
+## OTP detection
+
+TextBubbles scans every inbound message body for 2FA / verification codes and surfaces matches on the `message.inbound` webhook payload. Useful for auto-populating 2FA fields in your product, forwarding codes to a secure audit channel, or rendering a 🔒 reveal-on-click chip the way iOS and Android autofill do.
+
+Match shape:
+
+```json
+{
+  "otp": {
+    "provider": "whatsapp",
+    "code": "123456",
+    "rawMatch": "Your WhatsApp code: 123-456",
+    "confidence": "high"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `provider` | string | `"whatsapp"` for WhatsApp's canonical `Your WhatsApp code: XXX-XXX` signup SMS; `"generic"` for any 2FA-keyword-gated code |
+| `code` | string | Digits-only representation of the detected code. Hyphenated `123-456` and spaced `123 456` both normalize to `"123456"` |
+| `rawMatch` | string | The regex match as it appeared in the source text. Use this to highlight or mask the span in the message body when rendering |
+| `confidence` | string | `"high"` for provider-specific shapes (unique sender pattern). `"medium"` for generic matches — a 4–8 digit code alongside a context keyword |
+
+### Detection heuristics
+
+The detector is deliberately conservative — we'd rather miss some OTPs than false-positive on conversational numeric inbounds.
+
+- **WhatsApp signup SMS** (`provider: "whatsapp"`, high confidence) — matches WhatsApp's exact verification shape, `Your WhatsApp code: XXX-XXX`.
+- **Generic OTPs** (`provider: "generic"`, medium confidence) — matches a 4–8 digit group (flat or `XXX-XXX` / `XXX XXX`) **only when** one of these keywords appears in the body: `code`, `verification`, `verify`, `OTP`, `one-time`, `security code`, `passcode`, `pin`, `do not share`.
+
+Not flagged:
+- Bare numbers without a context keyword (`"2026"`, `"my address is 4th"`, `"I am 34"`)
+- Keywords without a digit group (`"What's the verification code?"`)
+
+### Redacting codes in your logs
+
+If you log webhook payloads, consider either redacting the matched span yourself (`text.replace(rawMatch, "••••••")`) or routing OTP-carrying inbounds to a stricter log channel. TextBubbles stores `otp` on the message record; `text` is preserved verbatim. A server-side `redactOtps` toggle on webhook config is on the roadmap — file a request if you'd like it sooner.
+
+## Typing Indicator
+
+WhatsApp contacts emit a typing event while composing a message. The webhook surfaces each emission as a single `typing.indicator` event. WhatsApp does **not** emit a corresponding "stopped typing" event — the stream simply goes quiet.
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "typing.indicator",
+  "timestamp": "2026-04-20T20:31:16.000Z",
+  "data": {
+    "state": "composing",
+    "from": "+14155551234",
+    "channel": "whatsapp",
+    "customerId": "4b02f4ab-35d9-444a-b0ee-4c2a3edd347c"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `state` | string | Always `"composing"` today. Future states (`paused`, etc.) may be added |
+| `from` | string | E.164 phone number of the contact who is typing |
+| `channel` | string | Always `"whatsapp"` — iMessage typing indicators are not surfaced as webhooks |
+| `customerId` | string | Customer the event belongs to |
+
+**Recommended consumer behavior:** treat each `typing.indicator` event as "show a typing bubble for ~5 seconds." WhatsApp re-emits the event every few seconds while the contact keeps typing, so the bubble stays on as long as they continue. When emissions stop, the bubble times out naturally.
+
+## WhatsApp Session Status
+
+`whatsapp.status` fires every time a WhatsApp session's pairing state changes — useful for driving a live pairing UI without polling `GET /v1/whatsapp/numbers/:phoneNumber/status`. Delivered on the Realtime/SSE stream only (not to webhook URLs).
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "whatsapp.status",
+  "timestamp": "2026-04-20T20:40:00.000Z",
+  "data": {
+    "phoneNumber": "+16282895642",
+    "status": "connected",
+    "jid": "16282895642:2@s.whatsapp.net",
+    "customerId": "4b02f4ab-35d9-444a-b0ee-4c2a3edd347c"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `phoneNumber` | string | The TextBubbles number whose session changed |
+| `status` | string | `qr_pending` / `connecting` / `connected` / `disconnected` |
+| `qrCode` | string \| null | Present when `status` is `qr_pending` — raw QR string, render with any library |
+| `jid` | string \| null | Present when `status` is `connected` — the paired WhatsApp JID (usually `<phone>:<device>@s.whatsapp.net`) |
+| `disconnectReason` | string \| null | Present when `status` is `disconnected` — `auth_revoked`, `phone_number_mismatch`, or `close_<code>` |
+| `customerId` | string | Customer the session belongs to |
+
+Subscribe from the textbubbles UI via Supabase Realtime, or from any SSE-capable client via `GET /v1/events?events=whatsapp.status`.
 
 ## Reaction Events
 
@@ -234,11 +359,11 @@ Emoji and sticker reactions (iOS 17+ / macOS 14+) include an `emoji` field:
 
 | Field | Description |
 |-------|-------------|
-| `reaction.type` | Reaction type: `love`, `like`, `dislike`, `laugh`, `emphasize`, `question`, `emoji`, `remove` |
-| `reaction.emoji` | The emoji character (present only when `type` is `emoji`) |
-| `reaction.targetMessageId` | Internal message ID the reaction was applied to (null if not found) |
-| `reaction.targetExternalId` | BlueBubbles GUID of the original message |
-| `reaction.content` | Human-readable description (null for emoji reactions) |
+| `reaction.type` | Reaction type. **iMessage:** `love`, `like`, `dislike`, `laugh`, `emphasize`, `question`, `emoji`, `remove`. **WhatsApp:** the raw emoji character (e.g. `❤️`, `🔥`), or the literal string `"removed"` when the reaction was cleared |
+| `reaction.emoji` | The emoji character. Present on iMessage when `type` is `emoji` (iOS 17+), and on WhatsApp whenever a non-empty emoji was sent |
+| `reaction.targetMessageId` | Internal `messageId` the reaction was applied to |
+| `reaction.targetExternalId` | Provider-level id of the original message (BlueBubbles GUID for iMessage, WA message id for WhatsApp) |
+| `reaction.content` | Human-readable description or preview of the target message text (null for emoji-only reactions on iMessage) |
 
 ## Audio Kept Events
 

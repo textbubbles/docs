@@ -1,0 +1,211 @@
+# WhatsApp
+
+TextBubbles supports **WhatsApp** as a first-class send/receive channel alongside iMessage and SMS. WhatsApp uses the **same phone number** as your existing iMessage/SMS line — one paired WhatsApp account per number.
+
+## Capabilities
+
+| Feature | Outbound | Inbound |
+|---|---|---|
+| Plain text | ✅ | ✅ |
+| Image (≤16 MB) | ✅ | ✅ |
+| Video (≤64 MB) | ✅ | ✅ |
+| Voice notes (PTT) via `attachments[].isAudioMessage: true` | ✅ | ✅ |
+| Documents (≤100 MB) | ✅ | ✅ |
+| Reactions | ✅ ([`POST /v1/messages/:id/reactions`](#reactions)) | ✅ via `message.reaction` webhook |
+| Replies (quoted) via `replyTo` | ✅ | ✅ |
+| Mentions in groups | ✅ | ✅ |
+| Send to existing groups via `to: "...@g.us"` | ✅ | ✅ |
+| Typing indicators | — | ✅ via `typing.indicator` webhook |
+| Read receipts on outbound (delivered/read) | ✅ via `message.delivered` / `message.read` webhooks | n/a |
+| iMessage-only fields (`effect`, `messageType: "carousel"`) | dropped | n/a |
+| Group create / add / remove participants | not supported | not supported |
+
+## Pairing a number
+
+Pairing links a WhatsApp account to one of your TextBubbles numbers. The phone number on the WhatsApp account **must match** the TextBubbles number — mismatched scans are rejected automatically.
+
+You can pair from the textbubbles UI (Settings → WhatsApp) or directly from the API.
+
+### API reference
+
+Every endpoint is scoped to numbers your API key owns; requests for a number that isn't linked to your customer return `403 NUMBER_NOT_OWNED`. Phone numbers in the path accept E.164 with or without the leading `+` (`+16282895642` and `16282895642` are both valid).
+
+**List your numbers with current WA status**
+
+```bash
+curl -H "Authorization: Bearer $TB_KEY" https://api.textbubbles.com/v1/whatsapp
+```
+
+Returns an array like:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "phoneNumber": "+16282895642",
+      "instanceName": "Internal Instance",
+      "isDefault": true,
+      "whatsapp": {
+        "status": "connected",
+        "jid": "16282895642:2@s.whatsapp.net",
+        "lastConnectedAt": "2026-04-20T20:39:55.000Z",
+        "lastDisconnectedAt": null,
+        "disconnectReason": null
+      }
+    }
+  ]
+}
+```
+
+`whatsapp.status` is one of `not_enabled`, `disconnected`, `connecting`, `qr_pending`, `connected`.
+
+**Start pairing (QR flow)**
+
+```bash
+NUM="+16282895642"
+# 1. Create the session and start QR flow
+curl -X POST -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/enable"
+
+# 2. Poll for the raw QR string (render with any QR library)
+curl -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/qr"
+
+# 3. On the phone for this number: WhatsApp → Settings → Linked Devices → Link a Device → scan
+
+# 4. Confirm the pair
+curl -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/status"
+```
+
+Rather than polling `/status`, subscribe to the `whatsapp.status` Realtime event (see [Webhooks & Events](/webhooks/events)) for a push update on every transition.
+
+**Pair-by-code (no QR display)**
+
+```bash
+curl -X POST -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/pairing-code"
+```
+
+Returns an 8-character code. On the phone, choose "Link with phone number instead" during the **Link a Device** flow and type the code. By default the pairing code is issued for the owned number; pass a different `phoneNumber` in the body to issue for a different device (rare).
+
+**Disconnect / remove**
+
+```bash
+# Stop the live session but keep credentials (quick re-connect later)
+curl -X POST -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/disconnect"
+
+# Permanently remove the session — credentials are deleted, next pair requires a fresh QR
+curl -X DELETE -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM"
+```
+
+**Check whether a recipient is on WhatsApp**
+
+```bash
+curl -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/check?phone=+14155551234"
+```
+
+Returns `{ exists: boolean, jid?: string }`. Useful to confirm reachability before sending with `routing.preference: ["whatsapp"]` and `fallback: false`.
+
+### Signing up for WhatsApp on a TextBubbles number
+
+If this number doesn't yet have a WhatsApp account, you'll first register one before you can link it:
+
+1. Install WhatsApp on a phone (any iOS / Android device you can keep paired — this is the device that becomes the account's home).
+2. In WhatsApp, enter the TextBubbles number when prompted.
+3. WhatsApp sends a verification SMS to that number — which arrives in your TextBubbles inbox.
+4. Retrieve the code (most easily via the endpoint below), type it into WhatsApp, and the account is created.
+5. Once the account exists, follow the [pairing flow](#api-reference) above to link TextBubbles as a device.
+
+**Surfacing the verification SMS code**
+
+```bash
+curl -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/signup-codes"
+```
+
+Scans the last 15 minutes of inbound messages to this number for anything matching WhatsApp's verification SMS format and returns the extracted codes:
+
+```json
+{
+  "success": true,
+  "data": {
+    "windowMinutes": 15,
+    "codes": [
+      {
+        "code": "123456",
+        "messageId": "msg_xyz",
+        "from": "+15555550000",
+        "channel": "sms",
+        "receivedAt": "2026-04-20T21:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+The detector is deliberately conservative — it matches WhatsApp's specific "`Your WhatsApp code: XXX-XXX`" shape so unrelated inbound messages (Uber OTPs, conversation fragments with numbers) don't show up here.
+
+## Sending
+
+See [Send Messages](/messages/send#whatsapp) for the full request shape. The `routing.preference` field decides which channel to try first; `to` is an E.164 phone number for individuals or a `...@g.us` JID for existing groups.
+
+## Reactions
+
+`POST /v1/messages/:id/reactions` works the same as for iMessage; the same `type` values apply on WhatsApp:
+
+| `type` | WhatsApp emoji |
+|---|---|
+| `love` | ❤️ |
+| `like` | 👍 |
+| `dislike` | 👎 |
+| `laugh` | 😂 |
+| `emphasize` | ‼️ |
+| `question` | ❓ |
+| Any other string (e.g. `🔥`) | passed through verbatim |
+| Negative form (e.g. `-love`) | removes the reaction |
+
+```bash
+curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"type":"love"}' \
+  https://api.textbubbles.com/v1/messages/msg_xxx/reactions
+```
+
+## Inbound
+
+Inbound WhatsApp messages, reactions, typing indicators, and delivery/read updates flow through your registered webhook the same way iMessage events do. Each event includes `"channel": "whatsapp"` and a `customerId`.
+
+Inbound media currently arrives base64-encoded inline in the webhook payload at `metadata.attachments[].dataBase64` for smaller files; very large media may arrive as a metadata-only entry. Treat the presence of `dataBase64` as the signal that the file is fully delivered.
+
+## Limitations
+
+- **One WhatsApp account per TextBubbles number.** Pairing uses the WhatsApp "Linked Devices" slot; revoking the link from the customer's phone disconnects the session and requires re-pairing.
+- **Group operations.** Sending into existing groups (and replying / mentioning within them) is supported; creating groups or managing membership through the API is not.
+- **iMessage-specific features** (`effect`, `messageType: "carousel"`) are silently dropped on a WhatsApp-only routing.
+
+## Errors
+
+Send-path errors surface on the message as `errorCode` (pull via `GET /v1/messages/:id`) and on `message.failed` webhook events.
+
+| Error code | Meaning |
+|---|---|
+| `NO_CHANNEL_AVAILABLE` | None of the channels in `routing.preference` are available for this recipient — e.g. `{"preference":["whatsapp"], "fallback":false}` to a number not on WhatsApp. Include `"imessage"` / `"sms"` in the preference list (with `fallback: true`) if you want graceful degradation. |
+| `WHATSAPP_NOT_CONNECTED` | No paired WhatsApp session for this number. Pair via the admin panel. |
+| `WHATSAPP_SEND_FAILED` | The WhatsApp send failed for an unexpected reason (transient upstream error, attachment URL unfetchable, etc.). Safe to retry. |
+| `WHATSAPP_MEDIA_TOO_LARGE` | Attachment exceeds WhatsApp's size limits (16 MB image / 64 MB video / 100 MB document). |
+| `WHATSAPP_REACTION_FAILED` | The reaction could not be delivered. |
+| `MISSING_WHATSAPP_JID` | Returned by `POST /v1/messages/:id/reactions` when the target message has no stored WhatsApp JID — should be rare; contact support if you see it on a message your customer sent through the API. |
+
+### Session-level states (not send errors)
+
+The following are **session disconnect reasons** surfaced on the WhatsApp instance's status (via `GET /v1/admin/instances/:id/whatsapp/status`), not on individual sends. Inspect `disconnectReason`:
+
+| Value | Meaning |
+|---|---|
+| `phone_number_mismatch` | The scanned WhatsApp account's number doesn't match the TextBubbles number this instance is registered to. The session was logged out automatically; re-pair with an account on the correct number. |
+| `auth_revoked` | The customer removed the textbubbles link from their phone's WhatsApp → Linked Devices. Re-enable to start a fresh QR flow. |
+| `close_<code>` | Transient close — the service will attempt to reconnect automatically. |

@@ -935,17 +935,18 @@ Every webhook event follows this structure:
 |-------|-------------|
 | message.queued | Message accepted and queued for delivery |
 | message.sent | Message sent to the carrier/provider |
-| message.delivered | Delivery confirmed by the recipient's device |
-| message.read | Read receipt received (iMessage only) |
+| message.delivered | Delivery confirmed by the recipient's device (iMessage, WhatsApp) |
+| message.read | Read receipt received (iMessage and WhatsApp — WhatsApp only when the recipient has read receipts enabled) |
 | message.failed | Message delivery failed |
 | message.fallback | Fallback triggered (e.g., iMessage to SMS) |
 | message.inbound | Inbound message received |
 | message.reaction | Tapback or emoji reaction added or removed |
 | message.audio_kept | Contact tapped "Keep" on a voice note you sent (iMessage only) |
 | message.unsent | Message was unsent/retracted |
-| message.edited | Message was successfully edited |
-| message.edit_failed | Message edit failed |
+| message.edited | Message was successfully edited (iMessage only) |
+| message.edit_failed | Message edit failed (iMessage only) |
 | message.deleted | Message was soft-deleted |
+| typing.indicator | Recipient is typing (WhatsApp only) |
 
 ## Chat Events
 
@@ -1421,3 +1422,107 @@ Base URL: https://api.textbubbles.com
 
 ## System
 - GET /health — Health check (no auth required)
+
+# WhatsApp
+
+WhatsApp is a first-class send/receive channel using the same phone number as the iMessage/SMS line. Pairing is per-number via QR code or pair-by-code.
+
+## Routing
+
+Include `"whatsapp"` in `routing.preference`:
+```json
+{ "routing": { "preference": ["whatsapp"] } }
+```
+Or fall back: `["whatsapp", "imessage", "sms"]`. Group sends use `to: "...@g.us"`.
+
+## Capabilities (outbound / inbound)
+
+- text: yes / yes
+- image (≤16 MB): yes / yes
+- video (≤64 MB): yes / yes
+- voice notes (PTT) via `attachments[].isAudioMessage: true`: yes / yes
+- documents (≤100 MB): yes / yes
+- reactions: yes (POST /v1/messages/:id/reactions, type → emoji map) / yes (message.reaction webhook)
+- replies (quoted via replyTo): yes / yes
+- mentions (groups only): yes / yes
+- typing indicators inbound: yes (typing.indicator webhook)
+- delivery + read tracking on outbound: yes (message.delivered / message.read webhooks)
+- iMessage `effect` / `messageType: "carousel"`: silently dropped on whatsapp send
+
+## Reaction type → emoji
+
+| type | emoji |
+|---|---|
+| love | ❤️ |
+| like | 👍 |
+| dislike | 👎 |
+| laugh | 😂 |
+| emphasize | ‼️ |
+| question | ❓ |
+| any other string | passed through verbatim |
+| `-love` etc. | removes the reaction |
+
+## Customer endpoints (per-number pairing & status)
+
+All endpoints are scoped to numbers the caller's API key owns. Requests for a number not linked to the caller's customer return 403 NUMBER_NOT_OWNED. Phone numbers in the path accept E.164 with or without leading `+`.
+
+- GET /v1/whatsapp — list all owned numbers with { phoneNumber, instanceName, isDefault, whatsapp: { status, jid?, lastConnectedAt?, lastDisconnectedAt?, disconnectReason? } }. whatsapp.status is one of not_enabled, disconnected, connecting, qr_pending, connected.
+- POST /v1/whatsapp/numbers/:phoneNumber/enable — create session, start QR flow
+- GET /v1/whatsapp/numbers/:phoneNumber/status — { status, jid, lastConnectedAt, ... }
+- GET /v1/whatsapp/numbers/:phoneNumber/qr — { qrCode } raw string, render with any QR lib
+- POST /v1/whatsapp/numbers/:phoneNumber/pairing-code — 8-char alternative to scanning a QR. Optional body { phoneNumber } to pair a different device; defaults to the owned number.
+- POST /v1/whatsapp/numbers/:phoneNumber/disconnect — drop live session, keep credentials (quick reconnect)
+- DELETE /v1/whatsapp/numbers/:phoneNumber — remove session entirely; next pair requires a fresh QR
+- GET /v1/whatsapp/numbers/:phoneNumber/check?phone=+1... — is the recipient on WhatsApp?
+- GET /v1/whatsapp/numbers/:phoneNumber/signup-codes — surface any WhatsApp verification SMS codes received in the last 15 minutes; used by the UI during WhatsApp account signup. Returns { windowMinutes, codes: [{ code, messageId, from, channel, receivedAt }] }.
+
+## Realtime status events
+
+whatsapp.status fires on every session transition (qr_pending / connecting / connected / disconnected). Delivered on the Realtime/SSE stream only — not to webhook URLs. Subscribe via Supabase Realtime (textbubbles UI) or `GET /v1/events?events=whatsapp.status`.
+
+Event data: { phoneNumber, status, qrCode? (when qr_pending), jid? (when connected), disconnectReason? (when disconnected), customerId }.
+
+## OTP detection on inbound messages
+
+Every inbound message (iMessage / SMS / WhatsApp) is scanned for 2FA / verification codes. When detected, a top-level `otp` object is added to the `message.inbound` webhook payload, and a matching `otp` bucket is persisted to `messages.metadata`:
+
+{
+  "otp": {
+    "provider": "whatsapp" | "generic",
+    "code": "123456",           // digits-only, normalized from XXX-XXX / XXX XXX
+    "rawMatch": "Your WhatsApp code: 123-456",  // use for highlighting / masking
+    "confidence": "high" | "medium"
+  }
+}
+
+Detector rules (deliberately conservative):
+- provider "whatsapp" / high confidence: matches WhatsApp's canonical "Your WhatsApp code: XXX-XXX" signup SMS shape.
+- provider "generic" / medium confidence: 4–8 digit codes (flat or XXX-XXX / XXX XXX) PLUS a context keyword — one of `code`, `verification`, `verify`, `otp`, `one-time`, `security code`, `passcode`, `pin`, `do not share`.
+- NOT flagged: bare numbers without context ("2026", "my address is 4th", "I am 34"), or keywords without a digit group ("what's the code?").
+
+Use cases: auto-populate a user's 2FA field, forward codes to a secure audit channel, render a reveal-on-click chip in a UI.
+
+## Phone-number guarantee
+
+The number on the scanned WhatsApp account MUST match the registered TextBubbles number. Mismatched scans are rejected automatically.
+
+## Inbound media
+
+Inbound media arrives base64-encoded inline at `metadata.attachments[].dataBase64` for smaller files; very large media may arrive as a metadata-only entry. Treat the presence of `dataBase64` as the signal that the file is fully delivered.
+
+## Errors
+
+Send-path error codes surface on the message as `errorCode` (GET /v1/messages/:id) and on message.failed webhook events.
+
+- NO_CHANNEL_AVAILABLE — none of the channels in routing.preference are available for this recipient (e.g. {"preference":["whatsapp"], "fallback":false} to a number not on WhatsApp). Include "imessage" or "sms" in the preference with fallback:true for graceful degradation.
+- WHATSAPP_NOT_CONNECTED — no paired WhatsApp session for this number. Pair via Settings → WhatsApp in the textbubbles UI or the /v1/whatsapp/** API.
+- WHATSAPP_SEND_FAILED — generic send failure (transient upstream, unfetchable attachment URL, etc). Safe to retry.
+- WHATSAPP_MEDIA_TOO_LARGE — attachment exceeds WhatsApp's size limits (16 MB image / 64 MB video / 100 MB document)
+- WHATSAPP_REACTION_FAILED — reaction could not be delivered
+- MISSING_WHATSAPP_JID — POST /v1/messages/:id/reactions target has no stored WhatsApp JID; should be rare for messages sent through the API
+
+Session-level disconnect reasons (surfaced on GET /v1/whatsapp/numbers/:phoneNumber/status as disconnectReason, NOT on individual sends):
+
+- phone_number_mismatch — the scanned account's number doesn't match the TextBubbles number this instance is registered to; auto-logged-out, re-pair with the correct account
+- auth_revoked — the customer removed the textbubbles link from WhatsApp → Linked Devices; re-enable for a fresh QR
+- close_<code> — transient close; the service reconnects automatically
