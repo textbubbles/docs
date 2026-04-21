@@ -216,6 +216,7 @@ Delivery-status events (`message.sent`, `message.delivered`, `message.read`, `me
 | `attachments[].totalBytes` | number | File size in bytes |
 | `attachments[].downloadUrl` | string | **iMessage.** Pre-signed URL to download the attachment. Time-limited (1 hour) and self-authenticated — no API key required. Fetch directly via GET request |
 | `attachments[].dataBase64` | string | **WhatsApp.** Base64-encoded file bytes for smaller attachments. Very large media may arrive as a metadata-only entry without `dataBase64` — the presence of `dataBase64` signals the file is fully delivered |
+| `otp` | object \| absent | Present when TextBubbles detected a 2FA / verification code in the inbound body (WhatsApp signup, bank OTP, etc.). See [OTP detection](#otp-detection) below |
 
 > **Replying to inbound messages:** always use `messageId` (internal), not `externalMessageId`, when invoking TextBubbles API endpoints. For example, to react to the inbound message above, `POST /v1/messages/msg_xyz789/reactions`.
 
@@ -243,6 +244,45 @@ When a contact quote-replies to a message you sent, the webhook surfaces the par
   }
 }
 ```
+
+## OTP detection
+
+TextBubbles scans every inbound message body for 2FA / verification codes and surfaces matches on the `message.inbound` webhook payload. Useful for auto-populating 2FA fields in your product, forwarding codes to a secure audit channel, or rendering a 🔒 reveal-on-click chip the way iOS and Android autofill do.
+
+Match shape:
+
+```json
+{
+  "otp": {
+    "provider": "whatsapp",
+    "code": "123456",
+    "rawMatch": "Your WhatsApp code: 123-456",
+    "confidence": "high"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `provider` | string | `"whatsapp"` for WhatsApp's canonical `Your WhatsApp code: XXX-XXX` signup SMS; `"generic"` for any 2FA-keyword-gated code |
+| `code` | string | Digits-only representation of the detected code. Hyphenated `123-456` and spaced `123 456` both normalize to `"123456"` |
+| `rawMatch` | string | The regex match as it appeared in the source text. Use this to highlight or mask the span in the message body when rendering |
+| `confidence` | string | `"high"` for provider-specific shapes (unique sender pattern). `"medium"` for generic matches — a 4–8 digit code alongside a context keyword |
+
+### Detection heuristics
+
+The detector is deliberately conservative — we'd rather miss some OTPs than false-positive on conversational numeric inbounds.
+
+- **WhatsApp signup SMS** (`provider: "whatsapp"`, high confidence) — matches WhatsApp's exact verification shape, `Your WhatsApp code: XXX-XXX`.
+- **Generic OTPs** (`provider: "generic"`, medium confidence) — matches a 4–8 digit group (flat or `XXX-XXX` / `XXX XXX`) **only when** one of these keywords appears in the body: `code`, `verification`, `verify`, `OTP`, `one-time`, `security code`, `passcode`, `pin`, `do not share`.
+
+Not flagged:
+- Bare numbers without a context keyword (`"2026"`, `"my address is 4th"`, `"I am 34"`)
+- Keywords without a digit group (`"What's the verification code?"`)
+
+### Redacting codes in your logs
+
+If you log webhook payloads, consider either redacting the matched span yourself (`text.replace(rawMatch, "••••••")`) or routing OTP-carrying inbounds to a stricter log channel. TextBubbles stores `otp` on the message record; `text` is preserved verbatim. A server-side `redactOtps` toggle on webhook config is on the roadmap — file a request if you'd like it sooner.
 
 ## Typing Indicator
 

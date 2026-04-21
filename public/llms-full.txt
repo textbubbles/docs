@@ -1409,6 +1409,26 @@ whatsapp.status fires on every session transition (qr_pending / connecting / con
 
 Event data: { phoneNumber, status, qrCode? (when qr_pending), jid? (when connected), disconnectReason? (when disconnected), customerId }.
 
+## OTP detection on inbound messages
+
+Every inbound message (iMessage / SMS / WhatsApp) is scanned for 2FA / verification codes. When detected, a top-level `otp` object is added to the `message.inbound` webhook payload, and a matching `otp` bucket is persisted to `messages.metadata`:
+
+{
+  "otp": {
+    "provider": "whatsapp" | "generic",
+    "code": "123456",           // digits-only, normalized from XXX-XXX / XXX XXX
+    "rawMatch": "Your WhatsApp code: 123-456",  // use for highlighting / masking
+    "confidence": "high" | "medium"
+  }
+}
+
+Detector rules (deliberately conservative):
+- provider "whatsapp" / high confidence: matches WhatsApp's canonical "Your WhatsApp code: XXX-XXX" signup SMS shape.
+- provider "generic" / medium confidence: 4–8 digit codes (flat or XXX-XXX / XXX XXX) PLUS a context keyword — one of `code`, `verification`, `verify`, `otp`, `one-time`, `security code`, `passcode`, `pin`, `do not share`.
+- NOT flagged: bare numbers without context ("2026", "my address is 4th", "I am 34"), or keywords without a digit group ("what's the code?").
+
+Use cases: auto-populate a user's 2FA field, forward codes to a secure audit channel, render a reveal-on-click chip in a UI.
+
 ## Phone-number guarantee
 
 The number on the scanned WhatsApp account MUST match the registered TextBubbles number. Mismatched scans are rejected automatically.
