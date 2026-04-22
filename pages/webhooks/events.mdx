@@ -2,6 +2,8 @@
 
 All webhook event types and their payloads.
 
+> **Fan-out:** if you have multiple webhooks registered and more than one is subscribed to an event type, each subscribed webhook receives its own delivery of that event — signed with that webhook's own secret. See [Webhook Configuration](./setup.mdx) for how to register multiple webhooks.
+
 ## Payload Structure
 
 Every webhook event follows this structure:
