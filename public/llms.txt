@@ -46,6 +46,7 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 - GET /v1/messages — List messages
 - GET /v1/messages/:id — Get message status
 - POST /v1/messages/:id/unsend — Unsend (iMessage only)
+- POST /v1/messages/:id/retry — Retry a failed message (new provider ID, same TextBubbles ID)
 - PUT /v1/messages/:id — Edit a message (iMessage only)
 - POST /v1/messages/:id/reactions — Send tapback reaction
 - DELETE /v1/messages/:id — Soft-delete

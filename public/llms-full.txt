@@ -434,6 +434,30 @@ curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/unsend \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
+## Retry a Failed Message — POST /v1/messages/:id/retry
+
+Re-send a message that previously landed in `status: failed` (for example, because the delivering Mac mini was unreachable when the original attempt ran). Only `failed` messages can be retried — `queued`, `sent`, or any other status returns `400 INVALID_STATUS`.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/retry \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Response (`202 Accepted`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_abc123",
+    "status": "queued",
+    "retryCount": 1
+  }
+}
+```
+
+The retry preserves the original recipient, content, attachments, routing preferences, and instance. A fresh provider message ID is issued on the new send — BlueBubbles has no native resend endpoint, so a retry is implemented as a new send that carries the same TextBubbles message ID. This endpoint is idempotent to call multiple times; `retryCount` increments on each invocation. Standard `message.queued` → `message.sent` / `message.failed` webhooks fire for the outcome.
+
 ## Edit a Message
 
 Update sent message content (iMessage only):
@@ -1403,6 +1427,7 @@ Base URL: https://api.textbubbles.com
 - GET /v1/messages — List messages
 - GET /v1/messages/:id — Get message status
 - POST /v1/messages/:id/unsend — Unsend a message (iMessage only)
+- POST /v1/messages/:id/retry — Retry a failed message (new provider ID, same TextBubbles ID)
 - PUT /v1/messages/:id — Edit a message (iMessage only)
 - POST /v1/messages/:id/reactions — Send tapback reaction
 - DELETE /v1/messages/:id — Soft-delete a message
