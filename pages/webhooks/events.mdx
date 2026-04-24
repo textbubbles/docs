@@ -108,7 +108,7 @@ Fired when the status of a FaceTime call changes (e.g., the call is answered or 
 |-------|-------------|
 | `callUuid` | Unique identifier for the call session |
 | `caller` / `address` | Phone number or email of the other party. `facetime.incoming` uses `caller`; `facetime.status_changed` uses `address` |
-| `to` | The phone number or email of the receiving BlueBubbles instance |
+| `to` | The phone number or email of the receiving iMessage instance |
 | `isAudio` / `isVideo` | Distinguish between FaceTime Audio and FaceTime Video calls. A FaceTime Audio call has `isAudio: true, isVideo: false`; a FaceTime Video call has `isAudio: false, isVideo: true` |
 | `status` | Current call status. Possible values: `"incoming"`, `"answered"`, `"disconnected"`, `"missed"`, `"rejected"`, `"failed"` |
 | `isOutgoing` | Whether the call was initiated by the instance (`true`) or received (`false`). Present on `facetime.status_changed` events |
@@ -237,7 +237,7 @@ Emoji and sticker reactions (iOS 17+ / macOS 14+) include an `emoji` field:
 | `reaction.type` | Reaction type: `love`, `like`, `dislike`, `laugh`, `emphasize`, `question`, `emoji`, `remove` |
 | `reaction.emoji` | The emoji character (present only when `type` is `emoji`) |
 | `reaction.targetMessageId` | Internal message ID the reaction was applied to (null if not found) |
-| `reaction.targetExternalId` | BlueBubbles GUID of the original message |
+| `reaction.targetExternalId` | Provider-assigned GUID of the original message |
 | `reaction.content` | Human-readable description (null for emoji reactions) |
 
 ## Audio Kept Events
@@ -262,15 +262,15 @@ Fired when a contact taps **Keep** on a voice note you sent. iMessage auto-delet
 
 | Field | Description |
 |-------|-------------|
-| `externalMessageId` | BlueBubbles GUID of the Keep system event itself |
-| `targetMessageId` | Internal message ID of the audio message that was kept. `null` if the audio predates our retention or was sent through a different BlueBubbles instance — `targetExternalId` is still populated so you can cross-reference if you store BB GUIDs |
-| `targetExternalId` | BlueBubbles GUID of the audio message that was kept |
+| `externalMessageId` | Provider-assigned GUID of the Keep system event itself |
+| `targetMessageId` | Internal message ID of the audio message that was kept. `null` if the audio predates our retention or was sent through a different iMessage instance — `targetExternalId` is still populated so you can cross-reference if you store provider GUIDs |
+| `targetExternalId` | Provider-assigned GUID of the audio message that was kept |
 | `from` | Contact who tapped Keep |
 | `to` | Instance phone number the audio was sent from |
 
 ## Chat Event Payloads
 
-All four chat events share the same envelope. Each carries `externalMessageId` (the BlueBubbles GUID of the chat.db system row), `chatId` (BlueBubbles chat identifier — for 1:1 chats this is the contact address; for group chats it's an opaque identifier you can match against the `chat` resource), and `actor` (who performed the action).
+All four chat events share the same envelope. Each carries `externalMessageId` (the provider-assigned GUID of the underlying system event), `chatId` (provider chat identifier — for 1:1 chats this is the contact address; for group chats it's an opaque identifier you can match against the `chat` resource), and `actor` (who performed the action).
 
 ### `chat.participant.added` / `chat.participant.left`
 
@@ -292,7 +292,7 @@ All four chat events share the same envelope. Each carries `externalMessageId` (
 
 | Field | Description |
 |-------|-------------|
-| `chatId` | BlueBubbles chat identifier |
+| `chatId` | Provider chat identifier |
 | `participant` | Contact added to (or removed from) the chat |
 | `actor` | Contact who performed the action |
 

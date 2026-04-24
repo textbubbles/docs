@@ -196,11 +196,11 @@ The health check endpoint requires no authentication and is not rate-limited. It
 
 The top-level `status` is `"ok"` when the database and Redis are both reachable, or `"degraded"` if either is down. BlueBubbles and WhatsApp statuses are reported for visibility but do not affect the top-level status.
 
-SMS fallback is handled natively by iMessage on the Mac mini — when an iMessage send fails to a non-iMessage recipient, Messages.app automatically falls back to SMS via the connected iPhone. There is no separate SMS provider to monitor.
+SMS fallback is handled natively by the iMessage provider — when an iMessage send fails to a non-iMessage recipient, the provider automatically falls back to SMS via a connected iPhone. There is no separate SMS provider to monitor.
 
 ### Instance Health Status
 
-Each BlueBubbles instance is independently monitored every 2 minutes. Instance health is stored as one of four values:
+Each iMessage provider instance is independently monitored every 2 minutes. Instance health is stored as one of four values:
 
 | Status | Meaning |
 |--------|---------|
@@ -216,9 +216,9 @@ When an instance has `degraded` status, the response includes an array of warnin
 | Condition | Warning | Impact |
 |-----------|---------|--------|
 | Private API disabled | "Private API is disabled" | Typing indicators, reactions, read receipts, and FaceTime events will not work |
-| Private API helper disconnected | "Private API helper is not connected" | Same features as above are unavailable; restart the helper from the BlueBubbles GUI to resolve |
+| Private API helper disconnected | "Private API helper is not connected" | Same features as above are unavailable; requires operator intervention to resolve |
 | No iMessage account detected | "No iMessage account detected" | iMessage and FaceTime will not work on this instance |
-| No iCloud account detected | "No iCloud account detected" | Sign in to iCloud on the Mac hosting this instance to resolve |
+| No iCloud account detected | "No iCloud account detected" | iMessage and FaceTime will not work on this instance; requires operator intervention to resolve |
 
 An instance can have multiple warnings at the same time. Warnings are cleared automatically when the next health check finds the condition resolved.
 

@@ -1035,7 +1035,7 @@ Fired when an incoming FaceTime call is detected on an instance.
 |-------|-------------|
 | callUuid | Unique identifier for the call session |
 | caller / address | Phone number or email of the other party. facetime.incoming uses caller; facetime.status_changed uses address |
-| to | Phone number or email of the receiving BlueBubbles instance |
+| to | Phone number or email of the receiving iMessage instance |
 | isAudio / isVideo | FaceTime Audio: isAudio=true, isVideo=false. FaceTime Video: isAudio=false, isVideo=true |
 | status | Call status: incoming, answered, disconnected, missed, rejected, failed |
 | isOutgoing | Whether the call was initiated by the instance (true) or received (false) |
@@ -1130,7 +1130,7 @@ Emoji reactions (iOS 17+):
 | reaction.type | love, like, dislike, laugh, emphasize, question, emoji, remove |
 | reaction.emoji | Emoji character (only when type is "emoji") |
 | reaction.targetMessageId | Internal message ID (null if not found) |
-| reaction.targetExternalId | BlueBubbles GUID of original message |
+| reaction.targetExternalId | Provider-assigned GUID of original message |
 | reaction.content | Human-readable description (null for emoji) |
 
 ## Audio Kept Events
@@ -1155,15 +1155,15 @@ Fired when a contact taps "Keep" on a voice note you sent. iMessage auto-deletes
 
 | Field | Description |
 |-------|-------------|
-| externalMessageId | BlueBubbles GUID of the Keep system event itself |
-| targetMessageId | Internal message ID of the kept audio. null if the audio predates our retention or was sent through a different BB instance |
-| targetExternalId | BlueBubbles GUID of the kept audio — always populated |
+| externalMessageId | Provider-assigned GUID of the Keep system event itself |
+| targetMessageId | Internal message ID of the kept audio. null if the audio predates our retention or was sent through a different iMessage instance |
+| targetExternalId | Provider-assigned GUID of the kept audio — always populated |
 | from | Contact who tapped Keep |
 | to | Instance phone number the audio was sent from |
 
 ## Chat Event Payloads
 
-All four chat events share the same envelope: `externalMessageId` (BB GUID of the chat.db system row), `chatId` (BB chat identifier), `actor` (who performed the action), `to` (instance phone), `channel: "imessage"`.
+All four chat events share the same envelope: `externalMessageId` (provider-assigned GUID of the underlying system event), `chatId` (provider chat identifier), `actor` (who performed the action), `to` (instance phone), `channel: "imessage"`.
 
 ### chat.participant.added / chat.participant.left
 
@@ -1185,7 +1185,7 @@ All four chat events share the same envelope: `externalMessageId` (BB GUID of th
 
 | Field | Description |
 |-------|-------------|
-| chatId | BlueBubbles chat identifier |
+| chatId | Provider chat identifier |
 | participant | Contact added to (or removed from) the chat |
 | actor | Contact who performed the action |
 
@@ -1374,7 +1374,7 @@ No authentication required. Not rate-limited.
 }
 ```
 
-Top-level status is "ok" when database and Redis are reachable, "degraded" if either is down. SMS fallback is handled natively by iMessage on the Mac mini (Messages.app falls back via the connected iPhone when iMessage fails), so there is no separate SMS provider to monitor.
+Top-level status is "ok" when database and Redis are reachable, "degraded" if either is down. SMS fallback is handled natively by the iMessage provider (falls back via a connected iPhone when iMessage delivery fails), so there is no separate SMS provider to monitor.
 
 ## Instance Health Statuses
 
