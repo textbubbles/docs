@@ -227,7 +227,7 @@ curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/unsend \
 
 ## Retry a Failed Message
 
-Re-send a message that previously failed (for example, because the delivering Mac mini was offline when the original attempt ran). Only messages currently in `status: failed` can be retried — messages that are still `queued`, `sent`, or in any other state return `400 INVALID_STATUS`.
+Re-send a message that previously landed in `status: failed` (for example, because of a transient delivery failure). Only messages currently in `status: failed` can be retried — messages that are still `queued`, `sent`, or in any other state return `400 INVALID_STATUS`.
 
 ```bash
 curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/retry \
