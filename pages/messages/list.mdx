@@ -83,9 +83,7 @@ Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes
 
 - **not** dispatched as `message.inbound` webhooks,
 - **not** delivered via the `/v1/events` stream,
-- **not** returned by `GET /v1/messages` or `GET /v1/messages/:id` (the endpoint returns `404`).
-
-This prevents API credentials from being used to intercept account-takeover codes on a phone number. The filter is default-on and cannot be disabled per API key. No notification is emitted when a verification code is suppressed.
+- **not** returned by `GET /v1/messages`
 
 ## Message Statuses
 
