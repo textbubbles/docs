@@ -639,6 +639,14 @@ Response:
 
 Inbound messages are delivered via the `message.inbound` webhook event. Subscribe to `message.inbound` in your webhook configuration.
 
+### Verification / OTP codes are suppressed
+
+Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes, or other verification codes (e.g. Apple ID, Google, bank account codes) are NOT surfaced through the API:
+
+- not dispatched as `message.inbound` webhooks
+- not delivered via the `/v1/events` stream
+- not returned by `GET /v1/messages` or `GET /v1/messages/:id`
+
 ## Message Endpoints
 
 | Method | Path | Description |
@@ -1069,7 +1077,7 @@ Every webhook event follows this structure:
 | message.read | Read receipt received (iMessage only) |
 | message.failed | Message delivery failed |
 | message.fallback | Fallback triggered (e.g., iMessage to SMS) |
-| message.inbound | Inbound message received |
+| message.inbound | Inbound message received (verification/OTP codes are suppressed — see Inbound Messages section) |
 | message.reaction | Tapback or emoji reaction added or removed |
 | message.audio_kept | Contact tapped "Keep" on a voice note you sent (iMessage only) |
 | message.unsent | Message was unsent/retracted |

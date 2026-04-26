@@ -36,7 +36,7 @@ Every webhook event follows this structure:
 | `message.read` | Read receipt received (iMessage only) |
 | `message.failed` | Message delivery failed |
 | `message.fallback` | Fallback triggered (e.g., iMessage to SMS) |
-| `message.inbound` | Inbound message received from a contact |
+| `message.inbound` | Inbound message received from a contact (verification/OTP codes are suppressed — see below) |
 | `message.reaction` | Tapback or emoji reaction added or removed |
 | `message.audio_kept` | Contact tapped "Keep" on a voice note you sent (iMessage only) |
 | `message.unsent` | Message was unsent/retracted |
@@ -190,6 +190,10 @@ Delivery-status events (`message.sent`, `message.delivered`, `message.read`, `me
 | `attachments[].downloadUrl` | string | Pre-signed URL to download the attachment. Time-limited (1 hour) and self-authenticated — no API key required. Fetch directly via GET request |
 
 > **Replying to inbound messages:** always use `messageId` (internal), not `externalMessageId`, when invoking TextBubbles API endpoints. For example, to react to the inbound message above, `POST /v1/messages/msg_xyz789/reactions`.
+
+### Verification / OTP codes are suppressed
+
+Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes, or other verification codes (e.g. Apple ID, Google, bank account codes) are **not** dispatched as `message.inbound` webhooks or emitted on the `/v1/events` stream. They are also hidden from `GET /v1/messages`.
 
 ## Reaction Events
 
