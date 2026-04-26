@@ -215,6 +215,22 @@ Every webhook request includes two headers:
 
 Each webhook has its own signing secret — the secret you supplied at creation time, or the one returned to you when the API generated one on your behalf. Signature computations for that webhook always use **that webhook's** secret, so different webhooks can have independent secrets safely.
 
+### Correlation header
+
+Every webhook delivery also includes:
+
+- **`X-Correlation-Id`** — `cor_{32 hex chars}` correlation identifier that ties this webhook back to the originating message lifecycle.
+
+The same identifier is also accepted on every API request (you can supply your own, or one is minted for you) and echoed back on every API response, so you can stitch your logs to ours end-to-end:
+
+```
+You POST /v1/messages with -H 'X-Correlation-Id: cor_abc...'
+   ↓ same id on the response
+   ↓ same id on the message.queued / message.sent / message.delivered webhooks back to you
+```
+
+Treat it as an opaque string. If you supply one, it must match the `cor_<32 hex chars>` shape — anything else is replaced with a freshly minted id.
+
 ### Verification Steps
 
 1. Extract the timestamp and signature from the headers

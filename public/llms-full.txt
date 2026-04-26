@@ -930,6 +930,12 @@ Every webhook request includes two headers:
 
 Each webhook signs with its own secret — the one you supplied on create, or the one the API generated and returned once. If you have multiple webhooks, each endpoint must verify using that specific webhook's secret.
 
+### Correlation Header
+
+Every webhook delivery also carries:
+
+- X-Correlation-Id — `cor_{32 hex chars}` correlation id that ties the delivery back to the originating message lifecycle. The same id is accepted on every API request (you can supply your own; one is minted otherwise) and echoed on every API response, so you can stitch your logs to ours. Treat it as opaque. If you supply one it must match `cor_<32 hex chars>`; anything else is replaced with a freshly minted id.
+
 ### Verification Steps
 
 1. Extract the timestamp and signature from the headers
