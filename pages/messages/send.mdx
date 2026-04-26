@@ -69,6 +69,8 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 
 TextBubbles exposes two ways to send non-text content on a message, and they map to different channels. Picking the wrong one is the most common source of "my image didn't send" bugs, so here is the decision rule.
 
+> **Text is optional when you send media.** Every request must include at least one of `content.text` (non-empty), `content.mediaUrls`, or `attachments[]`. You can send an attachment-only message — voice note, image with no caption, etc. — by omitting `content.text` or passing an empty string. Sending a request with no text, no `mediaUrls`, and no `attachments[]` returns `400`.
+
 | Use | Field | Channels | Source types | Notes |
 |-----|-------|----------|--------------|-------|
 | Send a file (photo, video, PDF, audio, any MIME type) over **iMessage** | `attachments[]` | iMessage only | `type: "url"` (HTTPS) or `type: "base64"` | Full iMessage attachment semantics. Required for non-image files. |
@@ -127,7 +129,7 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 
 ## Voice Memos
 
-To send an audio file as a native iMessage voice-memo bubble (inline player with waveform) instead of a generic file attachment, set `isAudioMessage: true` on the attachment. Voice memos are attachment-only — omit `content.text`.
+To send an audio file as a native iMessage voice-memo bubble (inline player with waveform) instead of a generic file attachment, set `isAudioMessage: true` on the attachment. Voice memos are attachment-only — either omit `content.text` (send `"content": {}`) or pass `"text": ""`. Both are accepted.
 
 Accepted formats: any audio (MP3, Opus/AAC/PCM in CAF, webm, m4a, ogg, wav, …). The server normalizes non-compatible inputs to Opus-in-CAF — the format iMessage's voice-memo UI can read. If you can, encode client-side to Opus-in-CAF to skip the extra server transcode.
 
