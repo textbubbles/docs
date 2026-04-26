@@ -59,8 +59,14 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 - GET /v1/numbers — List available sender addresses
 
 ### Webhooks
-- GET /v1/webhooks — Get webhook config
-- PUT /v1/webhooks — Set webhook URL and events
+- POST /v1/webhooks — Register a webhook (url, events, optional secret/name)
+- GET /v1/webhooks/list — List all registered webhooks
+- GET /v1/webhooks/{id} — Get a single webhook
+- PATCH /v1/webhooks/{id} — Update url/events/secret/name or pause (active=false)
+- DELETE /v1/webhooks/{id} — Remove a webhook
+- POST /v1/webhooks/{id}/test — Deliver a synthetic webhook.test event to one webhook
+- POST /v1/webhooks/{id}/rotate-secret — Rotate the signing secret for one webhook
+- GET /v1/webhooks, PUT /v1/webhooks, DELETE /v1/webhooks, POST /v1/webhooks/test, POST /v1/webhooks/rotate-secret — deprecated single-webhook variants
 
 ### Realtime Events
 - GET /v1/events — Server-Sent Events stream of realtime events (same payloads as webhooks)

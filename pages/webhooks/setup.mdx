@@ -1,14 +1,19 @@
 # Webhook Configuration
 
-Configure a webhook endpoint to receive real-time delivery updates and inbound messages. Each customer has their own isolated webhook configuration — your webhooks only receive events for your customer's messages.
+Register one or more webhook endpoints to receive real-time delivery updates and inbound messages. Each customer's webhooks are isolated — they only receive events for that customer's messages.
 
-## Set Up Your Webhook
+You can register any number of webhooks. Each webhook has its own URL, event subscription list, optional name, and its own signing secret. A single event is fanned out to every webhook that subscribed to that event type.
+
+Webhooks are unique per `(URL, event set)` for a given customer — creating a second webhook with the same URL and exact same event list returns `409 WEBHOOK_DUPLICATE`. Different URLs or different event sets are always allowed.
+
+## Register a Webhook
 
 ```bash
-curl -X PUT https://api.textbubbles.com/v1/webhooks \
+curl -X POST https://api.textbubbles.com/v1/webhooks \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "name": "Billing Events",
     "url": "https://your-server.com/webhooks/textbubbles",
     "events": [
       "message.queued",
@@ -19,43 +24,60 @@ curl -X PUT https://api.textbubbles.com/v1/webhooks \
       "message.inbound",
       "message.reaction",
       "typing.indicator"
-    ],
-    "secret": "whsec_your_signing_secret"
+    ]
   }'
 ```
 
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "b1a9e4e6-...-9f21",
+    "name": "Billing Events",
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": ["message.delivered", "message.failed", "..."],
+    "active": true,
+    "secret": "whsec_generated_signing_secret_value",
+    "createdAt": "2026-04-21T10:00:00.000Z",
+    "updatedAt": "2026-04-21T10:00:00.000Z"
+  },
+  "requestId": "req_abc123"
+}
+```
+
+The `secret` field is returned **only on creation** and **only when you did not supply one**. Store it immediately — it cannot be retrieved later. If you need a new secret, call [Rotate Signing Secret](#rotate-signing-secret).
+
+If you want to manage the secret yourself, pass `"secret": "your_own_value"` in the request body. The API stores it but does not echo it back.
+
+### Body fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `url` | yes | HTTPS URL to receive webhook `POST` requests |
+| `events` | yes | Array of event types to subscribe to. Use `["*"]` to subscribe to all current and future events |
+| `name` | no | Human-readable label, up to 100 characters |
+| `secret` | no | Your own HMAC-SHA256 signing secret. If omitted, a random one is generated and returned once |
+
 ## Wildcard Events
 
-Subscribe to all events at once using the wildcard `*`:
+Subscribe to every event type with `*`:
 
 ```bash
-curl -X PUT https://api.textbubbles.com/v1/webhooks \
+curl -X POST https://api.textbubbles.com/v1/webhooks \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://your-server.com/webhooks/textbubbles",
-    "events": ["*"],
-    "secret": "whsec_your_signing_secret"
+    "events": ["*"]
   }'
 ```
 
-This automatically subscribes to all current and future event types.
-
-## Get Current Configuration
+## List Your Webhooks
 
 ```bash
-curl https://api.textbubbles.com/v1/webhooks \
-  -H "Authorization: Bearer YOUR_API_KEY"
-```
-
-Returns `null` if no webhook is configured for your customer.
-
-## Delete Webhook Configuration
-
-Remove your webhook configuration entirely. Events will no longer be delivered until you re-register with `PUT /v1/webhooks`.
-
-```bash
-curl -X DELETE https://api.textbubbles.com/v1/webhooks \
+curl https://api.textbubbles.com/v1/webhooks/list \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
@@ -64,37 +86,76 @@ curl -X DELETE https://api.textbubbles.com/v1/webhooks \
 ```json
 {
   "success": true,
-  "data": {
-    "deleted": true
-  },
+  "data": [
+    {
+      "id": "b1a9e4e6-...-9f21",
+      "name": "Billing Events",
+      "url": "https://your-server.com/webhooks/billing",
+      "events": ["message.delivered", "message.failed"],
+      "active": true,
+      "createdAt": "2026-04-21T10:00:00.000Z",
+      "updatedAt": "2026-04-21T10:00:00.000Z"
+    },
+    {
+      "id": "c8d2f1a0-...-3c74",
+      "name": null,
+      "url": "https://your-server.com/webhooks/inbound",
+      "events": ["message.inbound"],
+      "active": true,
+      "createdAt": "2026-04-21T11:00:00.000Z",
+      "updatedAt": "2026-04-21T11:00:00.000Z"
+    }
+  ],
   "requestId": "req_abc123"
 }
 ```
 
-Returns `404 NOT_FOUND` if no webhook configuration exists for your customer.
+Secrets are never returned in list or get responses.
+
+## Get a Single Webhook
+
+```bash
+curl https://api.textbubbles.com/v1/webhooks/{id} \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Returns `404 WEBHOOK_NOT_FOUND` if the webhook does not exist or does not belong to your customer.
+
+## Update a Webhook
+
+Partially update a webhook. All body fields are optional; at least one must be provided.
+
+```bash
+curl -X PATCH https://api.textbubbles.com/v1/webhooks/{id} \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": ["message.delivered", "message.failed", "message.inbound"]
+  }'
+```
+
+**Updatable fields:** `url`, `events`, `secret`, `name`, `active`.
+
+Setting `"active": false` **pauses** the webhook — it stays in your list but receives no events. Set `"active": true` to resume. Use this when troubleshooting a downstream outage instead of deleting and re-creating.
+
+Returns `409 WEBHOOK_DUPLICATE` if the update would make the webhook collide with another active one on `(url, events)`. Returns `404 WEBHOOK_NOT_FOUND` if the webhook does not belong to your customer.
+
+## Delete a Webhook
+
+```bash
+curl -X DELETE https://api.textbubbles.com/v1/webhooks/{id} \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Returns `404 WEBHOOK_NOT_FOUND` if the webhook does not exist or does not belong to your customer.
 
 ## Send a Test Event
 
-Trigger a synthetic `webhook.test` event to your configured webhook URL. Useful for verifying connectivity, TLS, and signature handling on your endpoint without waiting for real traffic.
+Trigger a synthetic `webhook.test` event delivered to one specific webhook. Useful for verifying connectivity, TLS, and signature verification on your endpoint without waiting for real traffic.
 
 ```bash
-curl -X POST https://api.textbubbles.com/v1/webhooks/test \
+curl -X POST https://api.textbubbles.com/v1/webhooks/{id}/test \
   -H "Authorization: Bearer YOUR_API_KEY"
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "delivered": true,
-    "url": "https://your-server.com/webhooks/textbubbles",
-    "responseStatus": 200,
-    "eventId": "evt_test_550e8400-e29b-41d4-a716-446655440000"
-  },
-  "requestId": "req_abc123"
-}
 ```
 
 The test event delivered to your endpoint has this shape:
@@ -103,21 +164,22 @@ The test event delivered to your endpoint has this shape:
 {
   "id": "evt_test_550e8400-e29b-41d4-a716-446655440000",
   "type": "webhook.test",
-  "timestamp": "2026-04-09T10:00:00.000Z",
+  "timestamp": "2026-04-21T10:00:00.000Z",
   "data": {
-    "message": "This is a test webhook from TextBubbles"
+    "message": "This is a test event from TextBubbles...",
+    "webhookId": "b1a9e4e6-...-9f21"
   }
 }
 ```
 
-The request is signed the same way as production events, so you can use it to end-to-end test your [signature verification](#signature-verification) code. If your endpoint does not return a `2xx`, the response includes `delivered: false` and the upstream status code.
+The request is signed the same way as production events, so you can use it to end-to-end test your [signature verification](#signature-verification) code.
 
 ## Rotate Signing Secret
 
-Generate a new signing secret for your webhook. The old secret is immediately invalidated — update your endpoint with the new secret before rotating, or be prepared for a brief verification gap.
+Generate a new signing secret for a specific webhook. The old secret is immediately invalidated — update your endpoint with the new secret before rotating, or be prepared for a brief verification gap.
 
 ```bash
-curl -X POST https://api.textbubbles.com/v1/webhooks/rotate-secret \
+curl -X POST https://api.textbubbles.com/v1/webhooks/{id}/rotate-secret \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
@@ -127,16 +189,22 @@ curl -X POST https://api.textbubbles.com/v1/webhooks/rotate-secret \
 {
   "success": true,
   "data": {
+    "id": "b1a9e4e6-...-9f21",
+    "name": "Billing Events",
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": ["message.delivered"],
+    "active": true,
     "secret": "whsec_new_generated_secret_value",
-    "rotatedAt": "2026-04-09T10:00:00.000Z"
+    "createdAt": "2026-04-21T10:00:00.000Z",
+    "updatedAt": "2026-04-21T12:30:00.000Z"
   },
   "requestId": "req_abc123"
 }
 ```
 
-> **Important:** The `secret` value is returned **only once** in this response. Store it immediately — it cannot be retrieved later via `GET /v1/webhooks`. If you lose it, call this endpoint again to rotate a new secret.
+> **Important:** The `secret` value is returned **only once** in this response. Store it immediately — it cannot be retrieved later. If you lose it, call this endpoint again to rotate a new one.
 
-Returns `404 NOT_FOUND` if no webhook configuration exists for your customer. Rotation applies only after the per-webhook signing secret rollout reaches your account — see the note in [Signature Verification](#signature-verification).
+Returns `404 WEBHOOK_NOT_FOUND` if the webhook does not exist or does not belong to your customer.
 
 ## Signature Verification
 
@@ -145,9 +213,7 @@ Every webhook request includes two headers:
 - **`X-Signature`** — `sha256={hmac_hex}` HMAC-SHA256 signature (lowercase hex, prefixed with `sha256=`)
 - **`X-Timestamp`** — Unix timestamp in **seconds** (not milliseconds) when the webhook was signed
 
-> **Important — which secret is used**
->
-> The signature is currently computed with a **platform-wide signing secret** managed by TextBubbles, **not** the per-webhook `secret` you pass to `PUT /v1/webhooks`. To verify signatures on your endpoint, contact TextBubbles support to retrieve your platform signing secret, or ask to have your account placed on the per-webhook secret rollout. The `secret` field on `PUT /v1/webhooks` is stored but not yet used for outbound signing — a future release will switch signing to the per-webhook secret. Until then, do not attempt to verify using a secret you set yourself; use the platform secret TextBubbles provides.
+Each webhook has its own signing secret — the secret you supplied at creation time, or the one returned to you when the API generated one on your behalf. Signature computations for that webhook always use **that webhook's** secret, so different webhooks can have independent secrets safely.
 
 ### Verification Steps
 
@@ -272,7 +338,7 @@ def verify_webhook(raw_body: str, signature: str, timestamp: str, secret: str) -
     raw_body: the exact request body as a string (do NOT re-serialize parsed JSON)
     signature: value of the X-Signature header, e.g. "sha256=abc123..."
     timestamp: value of the X-Timestamp header (unix seconds, as a string)
-    secret: your TextBubbles platform signing secret
+    secret: the signing secret for this webhook
     """
     age = abs(time.time() - int(timestamp))
     if age > 300:
@@ -292,7 +358,7 @@ def verify_webhook(raw_body: str, signature: str, timestamp: str, secret: str) -
 - **Wrong separator.** The signed string is `{timestamp}.{body}` — a literal ASCII period between timestamp and body, with no spaces.
 - **Millisecond vs second timestamp.** `X-Timestamp` is Unix **seconds**. Dividing `Date.now()` by 1000 and flooring gives the right unit.
 - **Forgetting the `sha256=` prefix** in the comparison string.
-- **Using a secret you set.** The per-webhook `secret` field on `PUT /v1/webhooks` is not currently the signing key — see the note at the top of this section.
+- **Using the wrong webhook's secret.** If you register multiple webhooks that point at different endpoints, each one has its own secret. Verify each endpoint using the secret you received when creating (or rotating) that specific webhook.
 
 ## Retry Policy
 
@@ -315,4 +381,19 @@ Your endpoint must respond with a `2xx` status code within 30 seconds.
 - **Return `200` quickly** — process events asynchronously in a background job
 - **Handle duplicates** — use the `id` field to deduplicate events
 - **Verify signatures** — always validate `X-Signature` before processing
-- **Use per-message callbacks** — for routing to different systems, use the `callbackUrl` field on individual messages
+- **Use per-message callbacks** — for routing to different systems, use the `callbackUrl` field on individual messages. Or register a webhook with a narrower event subscription for the route you care about
+- **Pause, don't delete** — if a downstream system is temporarily unhealthy, set `active: false` on the affected webhook instead of deleting it, so the registration and secret are preserved
+
+## Legacy Single-Webhook Endpoints
+
+The older single-webhook endpoints continue to work but are deprecated. They operate against your first active webhook (oldest `createdAt`) and are kept so that existing integrations keep working.
+
+| Deprecated | Replacement |
+|-----------|-------------|
+| `PUT /v1/webhooks` (replaces all active webhooks with one) | `POST /v1/webhooks` |
+| `GET /v1/webhooks` (returns first active or `null`) | `GET /v1/webhooks/list` |
+| `DELETE /v1/webhooks` (deactivates all active webhooks) | `DELETE /v1/webhooks/{id}` |
+| `POST /v1/webhooks/test` (first active webhook) | `POST /v1/webhooks/{id}/test` |
+| `POST /v1/webhooks/rotate-secret` (first active webhook) | `POST /v1/webhooks/{id}/rotate-secret` |
+
+New integrations should use the id-scoped endpoints above.

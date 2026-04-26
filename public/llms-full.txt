@@ -106,18 +106,19 @@ curl https://api.textbubbles.com/v1/capabilities/+14155551234 \
 
 ## 5. Set Up Webhooks
 
-Receive real-time delivery updates and inbound messages:
+Register one or more webhooks to receive real-time delivery updates and inbound messages. Each has its own URL, event subscription list, and signing secret:
 
 ```bash
-curl -X PUT https://api.textbubbles.com/v1/webhooks \
+curl -X POST https://api.textbubbles.com/v1/webhooks \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://your-server.com/webhooks/textbubbles",
-    "events": ["message.sent", "message.delivered", "message.inbound"],
-    "secret": "whsec_your_signing_secret"
+    "events": ["message.sent", "message.delivered", "message.inbound"]
   }'
 ```
+
+If you omit `secret`, the API generates one and returns it in the response — store it immediately, it cannot be retrieved later.
 
 ---
 
@@ -465,11 +466,42 @@ Include an `idempotencyKey` to prevent duplicate sends during retries:
 
 If a message with the same key already exists, the API returns 200 OK with the existing message.
 
+## Group Chats — POST /v1/messages with conversationId
+
+Send into an existing group chat (or any pinned conversation) by passing `conversationId` instead of `to`. The `conversationId` is returned from `POST /v1/chats/groups`. Exactly one of `to` or `conversationId` must be provided.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
+    "content": { "text": "Hey team" }
+  }'
+```
+
+When `conversationId` is used:
+- The channel is pinned to whatever the conversation was created on; `routing` and `fallback` are ignored.
+- Group send on SMS is not supported; returns 400 GROUP_SMS_UNSUPPORTED.
+- `createContact` is ignored (no single recipient).
+
+Create a group:
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/groups \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "participants": ["+14155551234", "+14155559876"], "name": "Launch Team" }'
+```
+
+Response data: `{ chatId, conversationId, participants, name, createdAt }`. Use `conversationId` for sends; `chatId` for chat-level endpoints (rename, add/remove participant, leave).
+
 ## Full Request Schema — POST /v1/messages
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| to | string | Yes | Recipient phone number (E.164) or iMessage email address |
+| to | string | Conditionally | Recipient phone number (E.164) or iMessage email address. Required unless conversationId is provided. |
+| conversationId | string | Conditionally | UUID of an existing conversation for group or pinned sends. Required unless to is provided. |
 | from | string | No | Sender address (must be authorized; uses default if omitted) |
 | content.text | string | No | Message text (up to 10,000 chars). Optional if content.mediaUrls is provided |
 | content.mediaUrls | string[] | No | Array of 1-20 HTTPS image URLs. When 2+ URLs are provided, sends as an image carousel |
@@ -723,15 +755,18 @@ Add visual effects to iMessage messages using the `effect` field. Effects are si
 
 # Webhook Configuration
 
-Configure a webhook endpoint to receive real-time delivery updates and inbound messages. Each customer has their own isolated webhook configuration.
+Register one or more webhook endpoints to receive real-time delivery updates and inbound messages. Each customer can register any number of webhooks; each has its own URL, event subscription list, optional name, and own signing secret. A single event is fanned out to every webhook that subscribed to that event type.
 
-## Set Up Your Webhook
+Webhooks are unique per `(URL, event set)` for a given customer — creating a second webhook with the same URL and exact same event list returns `409 WEBHOOK_DUPLICATE`. Different URLs or different event sets are always allowed.
+
+## Register a Webhook
 
 ```bash
-curl -X PUT https://api.textbubbles.com/v1/webhooks \
+curl -X POST https://api.textbubbles.com/v1/webhooks \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "name": "Billing Events",
     "url": "https://your-server.com/webhooks/textbubbles",
     "events": [
       "message.queued",
@@ -739,33 +774,8 @@ curl -X PUT https://api.textbubbles.com/v1/webhooks \
       "message.delivered",
       "message.failed",
       "message.inbound"
-    ],
-    "secret": "whsec_your_signing_secret"
+    ]
   }'
-```
-
-## Wildcard Events
-
-Subscribe to all events at once using the wildcard *:
-
-```bash
-curl -X PUT https://api.textbubbles.com/v1/webhooks \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://your-server.com/webhooks/textbubbles",
-    "events": ["*"],
-    "secret": "whsec_your_signing_secret"
-  }'
-```
-
-This automatically subscribes to all current and future event types.
-
-## Get Current Configuration
-
-```bash
-curl https://api.textbubbles.com/v1/webhooks \
-  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 Response:
@@ -774,16 +784,110 @@ Response:
 {
   "success": true,
   "data": {
+    "id": "b1a9e4e6-...-9f21",
+    "name": "Billing Events",
     "url": "https://your-server.com/webhooks/textbubbles",
-    "events": ["message.sent", "message.delivered", "message.inbound"],
+    "events": ["message.delivered", "message.failed"],
     "active": true,
-    "createdAt": "2026-03-28T10:00:00.000Z",
-    "updatedAt": "2026-03-28T10:00:00.000Z"
+    "secret": "whsec_generated_signing_secret_value",
+    "createdAt": "2026-04-21T10:00:00.000Z",
+    "updatedAt": "2026-04-21T10:00:00.000Z"
   }
 }
 ```
 
-Returns `null` if no webhook is configured for your customer.
+The `secret` field is returned only on creation and only when you did not supply one. Store it immediately — it cannot be retrieved later.
+
+Body fields:
+
+- `url` (required) — HTTPS URL to receive webhook POST requests
+- `events` (required) — array of event types; use `["*"]` to subscribe to all
+- `name` (optional) — human-readable label, up to 100 characters
+- `secret` (optional) — your own HMAC-SHA256 signing secret. If omitted one is generated and returned once
+
+## Wildcard Events
+
+Subscribe to every event type with `*`:
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": ["*"]
+  }'
+```
+
+## List Webhooks
+
+```bash
+curl https://api.textbubbles.com/v1/webhooks/list \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Returns an array of your registered webhooks. Secrets are never returned in list or get responses.
+
+## Get a Single Webhook
+
+```bash
+curl https://api.textbubbles.com/v1/webhooks/{id} \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Returns `404 WEBHOOK_NOT_FOUND` if the webhook does not exist or does not belong to your customer.
+
+## Update a Webhook
+
+```bash
+curl -X PATCH https://api.textbubbles.com/v1/webhooks/{id} \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": ["message.delivered", "message.failed"]
+  }'
+```
+
+Updatable fields: `url`, `events`, `secret`, `name`, `active`. Setting `active: false` pauses the webhook without deleting it.
+
+Returns `409 WEBHOOK_DUPLICATE` on collision, `404 WEBHOOK_NOT_FOUND` if not yours.
+
+## Delete a Webhook
+
+```bash
+curl -X DELETE https://api.textbubbles.com/v1/webhooks/{id} \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Send a Test Event to a Webhook
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/webhooks/{id}/test \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Delivers a synthetic `webhook.test` event to one specific webhook, signed with its own secret.
+
+## Rotate a Webhook's Signing Secret
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/webhooks/{id}/rotate-secret \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Returns the new secret plaintext in the response. It cannot be retrieved later — store it immediately.
+
+## Legacy Single-Webhook Endpoints (deprecated)
+
+These operate against your first active webhook (oldest `createdAt`) and are kept for backward compatibility:
+
+- `GET /v1/webhooks` — returns the first active webhook or `null`
+- `PUT /v1/webhooks` — deactivates all your active webhooks and creates a single new one
+- `DELETE /v1/webhooks` — deactivates all your active webhooks
+- `POST /v1/webhooks/test` — tests the first active webhook
+- `POST /v1/webhooks/rotate-secret` — rotates the first active webhook's secret
+
+New integrations should use the id-scoped endpoints above.
 
 ## Signature Verification
 
@@ -791,6 +895,8 @@ Every webhook request includes two headers:
 
 - X-Signature — `sha256={hmac_hex}` HMAC-SHA256 signature
 - X-Timestamp — Unix timestamp (seconds) when the webhook was sent
+
+Each webhook signs with its own secret — the one you supplied on create, or the one the API generated and returned once. If you have multiple webhooks, each endpoint must verify using that specific webhook's secret.
 
 ### Verification Steps
 
@@ -1377,6 +1483,10 @@ Top-level status is "ok" when database and Redis are reachable, "degraded" if ei
 | REPLY_NOT_FOUND | 404 | Reply target message not found |
 | CHANNEL_NOT_SUPPORTED | 400 | Operation not supported on channel |
 | NO_CHANNEL_AVAILABLE | 400 | Recipient not reachable |
+| INVALID_RECIPIENT | 400 | Must provide exactly one of `to` or `conversationId` on send |
+| CONVERSATION_NOT_FOUND | 404 | `conversationId` does not match any conversation for this customer |
+| CONVERSATION_NOT_READY | 409 | Conversation has no provider chat yet; retry after the chat is created |
+| GROUP_SMS_UNSUPPORTED | 400 | Group send is not supported on SMS; send to participants individually |
 | INVALID_STATUS | 400 | Operation not valid for current status |
 | MISSING_EXTERNAL_ID | 400 | Message has no external provider ID |
 | ALREADY_UNSENT | 409 | Message already unsent |
@@ -1416,8 +1526,14 @@ Base URL: https://api.textbubbles.com
 - GET /v1/numbers — List available sender addresses
 
 ## Webhooks
-- GET /v1/webhooks — Get webhook config
-- PUT /v1/webhooks — Set webhook URL and events
+- POST /v1/webhooks — Register a webhook (url, events, optional secret/name)
+- GET /v1/webhooks/list — List all registered webhooks
+- GET /v1/webhooks/{id} — Get a single webhook
+- PATCH /v1/webhooks/{id} — Update url/events/secret/name or pause with active=false
+- DELETE /v1/webhooks/{id} — Remove a webhook
+- POST /v1/webhooks/{id}/test — Deliver a synthetic webhook.test event to one webhook
+- POST /v1/webhooks/{id}/rotate-secret — Rotate the signing secret for one webhook
+- GET /v1/webhooks, PUT /v1/webhooks, DELETE /v1/webhooks, POST /v1/webhooks/test, POST /v1/webhooks/rotate-secret — deprecated single-webhook variants
 
 ## System
 - GET /health — Health check (no auth required)
