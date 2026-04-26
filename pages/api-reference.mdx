@@ -189,7 +189,7 @@ The health check endpoint requires no authentication and is not rate-limited. It
   "checks": {
     "database": { "status": "ok" },
     "redis": { "status": "ok" },
-    "bluebubbles": { "status": "ok" },
+    "imessage": { "status": "ok" },
     "whatsapp": {
       "status": "not_enabled",
       "experimental": true
@@ -198,7 +198,7 @@ The health check endpoint requires no authentication and is not rate-limited. It
 }
 ```
 
-The top-level `status` is `"ok"` when the database and Redis are both reachable, or `"degraded"` if either is down. BlueBubbles and WhatsApp statuses are reported for visibility but do not affect the top-level status.
+The top-level `status` is `"ok"` when the database and Redis are both reachable, or `"degraded"` if either is down. iMessage and WhatsApp statuses are reported for visibility but do not affect the top-level status.
 
 SMS fallback is handled natively by the iMessage provider — when an iMessage send fails to a non-iMessage recipient, the provider automatically falls back to SMS via a connected iPhone. There is no separate SMS provider to monitor.
 
@@ -257,7 +257,7 @@ An instance can have multiple warnings at the same time. Warnings are cleared au
 | `SCHEDULED_TOO_FAR` | 400 | Scheduled time is more than 30 days away |
 | `DEPRECATED` | 410 | Endpoint has been deprecated |
 | `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
-| `BLUEBUBBLES_TIMEOUT` | 504 | Upstream iMessage service timed out |
+| `PROVIDER_TIMEOUT` | 504 | Upstream iMessage service timed out |
 | `EDIT_FAILED` | 502 | Message edit could not be completed |
 | `IMESSAGE_SEND_FAILED` | 500 | iMessage delivery error |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |

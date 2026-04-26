@@ -1479,7 +1479,7 @@ No authentication required. Not rate-limited.
   "checks": {
     "database": { "status": "ok" },
     "redis": { "status": "ok" },
-    "bluebubbles": { "status": "ok" },
+    "imessage": { "status": "ok" },
     "whatsapp": {
       "status": "not_enabled",
       "experimental": true
@@ -1529,7 +1529,7 @@ Top-level status is "ok" when database and Redis are reachable, "degraded" if ei
 | SCHEDULED_TOO_FAR | 400 | Scheduled time is more than 30 days away |
 | DEPRECATED | 410 | Endpoint has been deprecated |
 | RATE_LIMIT_EXCEEDED | 429 | Too many requests |
-| BLUEBUBBLES_TIMEOUT | 504 | Upstream iMessage service timed out |
+| PROVIDER_TIMEOUT | 504 | Upstream iMessage service timed out |
 | EDIT_FAILED | 502 | Message edit could not be completed |
 | IMESSAGE_SEND_FAILED | 500 | iMessage delivery error |
 | INTERNAL_ERROR | 500 | Unexpected server error |

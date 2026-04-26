@@ -36,15 +36,7 @@ When you catch an internal detail, swap it for the customer-visible concept:
 | "the BullMQ worker picked it up" | "the message entered the processing queue" |
 | "the self-hosted runner deployed" | (omit — deploys are not a customer concern) |
 
-**Known outstanding leaks** — after the 2026-04-23 scrub, the only remaining BlueBubbles mentions are in lines that document literal API output:
-
-- `pages/api-reference.mdx:188` + mirror `public/llms-full.txt:1368` — `"bluebubbles": { "status": "ok" }` key in the health-check response example.
-- `pages/api-reference.mdx:197` — prose narrating "BlueBubbles and WhatsApp statuses" (tied to the example above; rewrite together).
-- `pages/api-reference.mdx:249` + mirror `public/llms-full.txt:1414` — `BLUEBUBBLES_TIMEOUT` error code row.
-
-These are blocked on a coordinated `api/` rename (e.g. `"bluebubbles"` → `"imessage"` health key; `BLUEBUBBLES_TIMEOUT` → `PROVIDER_TIMEOUT` or `IMESSAGE_TIMEOUT`) because the API still returns those literal strings. Fixing just the docs would create a doc/API mismatch and strand customers whose error-handling matches on the old code. The `api/` draft PR that tracks this work must land first (or in the same release) with a deprecation window — then these lines get updated to match.
-
-Do not let new PRs add any fresh BlueBubbles / Mac mini / internal-infra references while the above cluster is pending.
+As of 2026-04-25, the customer-facing surface is fully scrubbed. Do not let new PRs reintroduce BlueBubbles / Mac mini / internal-infra references.
 
 ## Docs-sync contract (from workspace `CLAUDE.md`)
 
