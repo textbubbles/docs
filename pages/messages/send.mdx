@@ -225,6 +225,30 @@ curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/unsend \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
+## Retry a Failed Message
+
+Re-send a message that previously landed in `status: failed` (for example, because of a transient delivery failure). Only messages currently in `status: failed` can be retried — messages that are still `queued`, `sent`, or in any other state return `400 INVALID_STATUS`.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/retry \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Response (`202 Accepted`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_abc123",
+    "status": "queued",
+    "retryCount": 1
+  }
+}
+```
+
+The retry preserves the original recipient, content, attachments, routing preferences, and instance. A fresh provider message ID is issued on the new send — from iMessage's perspective this is a new send that carries the same TextBubbles message ID. You can call this endpoint multiple times; `retryCount` increments on each attempt. Watch the usual `message.queued` → `message.sent` / `message.failed` webhooks to track the outcome.
+
 ## Edit a Message
 
 Update sent message content (iMessage only):
