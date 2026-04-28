@@ -522,12 +522,14 @@ Response data: `{ chatId, conversationId, participants, name, createdAt }`. Use 
 
 ## Full Request Schema — POST /v1/messages
 
+Every request must include at least one of `content.text` (non-empty), `content.mediaUrls`, or `attachments[]`. A request with no text, no mediaUrls, and no attachments returns 400.
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | to | string | Conditionally | Recipient phone number (E.164) or iMessage email address. Required unless conversationId is provided. |
 | conversationId | string | Conditionally | UUID of an existing conversation for group or pinned sends. Required unless to is provided. |
 | from | string | No | Sender address (must be authorized; uses default if omitted) |
-| content.text | string | No | Message text (up to 10,000 chars). Optional if content.mediaUrls is provided |
+| content.text | string | No | Message text (up to 10,000 chars). Optional if content.mediaUrls or attachments[] is provided. May be omitted or empty for attachment-only messages (voice notes, images with no caption). |
 | content.mediaUrls | string[] | No | Array of 1-20 HTTPS image URLs. When 2+ URLs are provided, sends as an image carousel |
 | routing.preference | string[] | No | Channel priority (default: ["imessage", "sms"]) |
 | routing.fallback | boolean | No | Enable fallback (default: true) |
