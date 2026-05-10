@@ -1,0 +1,16 @@
+# Interactive Webhook Configurator
+
+import { WebhookConfigurator } from '../../components/webhook-configurator'
+
+Fill in your webhook details below. The form will generate the exact request you would send to register the webhook, and can optionally send it live against the API on your behalf.
+
+> **Heads up.** Inputs you type here stay in your browser — they aren't sent anywhere unless you click **Send live request**. Even so, you may prefer to copy the generated snippet and run it from your own terminal or backend instead.
+
+<WebhookConfigurator />
+
+## How this page works
+
+- **Preview snippet** renders a `curl` command and request body with your values filled in. Nothing leaves your browser. Copy and run it wherever you like.
+- **Send live request** posts the request directly from your browser to `https://api.textbubbles.com/v1/webhooks` using your API key. The response is shown below the form.
+
+For the full reference (all fields, response shape, error codes, signature verification) see [Webhook Configuration](/webhooks/setup).
