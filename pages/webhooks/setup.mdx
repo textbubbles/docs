@@ -6,6 +6,8 @@ You can register any number of webhooks. Each webhook has its own URL, event sub
 
 Webhooks are unique per `(URL, event set)` for a given customer — creating a second webhook with the same URL and exact same event list returns `409 WEBHOOK_DUPLICATE`. Different URLs or different event sets are always allowed.
 
+> Prefer to fill in a form? See the [Interactive Configurator](/webhooks/configurator) — it generates the exact `curl` command for your inputs and can optionally send the request live.
+
 ## Register a Webhook
 
 ```bash

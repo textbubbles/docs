@@ -31,6 +31,7 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 - [Tapback Reactions](https://docs.textbubbles.com/messages/reactions): POST /v1/messages/:id/reactions
 - [Message Effects](https://docs.textbubbles.com/messages/effects): iMessage effects (confetti, fireworks, etc.)
 - [Webhook Setup](https://docs.textbubbles.com/webhooks/setup): Configure webhook URL, signature verification
+- [Interactive Webhook Configurator](https://docs.textbubbles.com/webhooks/configurator): Browser form that generates the registration curl from filled-in inputs and can POST it live
 - [Webhook Events](https://docs.textbubbles.com/webhooks/events): All event types and payload schemas
 - [Realtime Events (SSE)](https://docs.textbubbles.com/webhooks/events#realtime-sse): GET /v1/events — live event stream without hosting a webhook endpoint
 - [SDK Installation](https://docs.textbubbles.com/sdk/installation): npm install @textbubbles/js
