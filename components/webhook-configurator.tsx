@@ -54,6 +54,78 @@ export function WebhookConfigurator() {
   const [events, setEvents] = useState<Set<EventName | '*'>>(new Set(['*']))
   const [preview, setPreview] = useState<SnippetPreview | null>(null)
   const [copied, setCopied] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [response, setResponse] = useState<
+    | { kind: 'success'; status: number; body: string }
+    | { kind: 'error'; status: number | null; body: string; message: string }
+    | null
+  >(null)
+
+  function validateForLive(): string | null {
+    if (!apiKey.trim()) return 'API key is required to send a live request.'
+    if (!url.trim()) return 'Webhook URL is required.'
+    try {
+      const u = new URL(url)
+      if (u.protocol !== 'https:') return 'Webhook URL must use https://.'
+    } catch {
+      return 'Webhook URL is not a valid URL.'
+    }
+    if (events.size === 0) return 'Select at least one event (or use the * wildcard).'
+    return null
+  }
+
+  async function sendLive() {
+    const validationError = validateForLive()
+    if (validationError) {
+      setResponse({ kind: 'error', status: null, body: '', message: validationError })
+      return
+    }
+    const snippet = buildSnippet({
+      apiKey,
+      url,
+      name,
+      secret,
+      events: Array.from(events),
+    })
+    setPreview(snippet)
+    setSubmitting(true)
+    setResponse(null)
+    try {
+      const res = await fetch('https://api.textbubbles.com/v1/webhooks', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(snippet.body),
+      })
+      const text = await res.text()
+      let pretty = text
+      try {
+        pretty = JSON.stringify(JSON.parse(text), null, 2)
+      } catch { /* leave as-is */ }
+      if (res.ok) {
+        setResponse({ kind: 'success', status: res.status, body: pretty })
+      } else {
+        setResponse({
+          kind: 'error',
+          status: res.status,
+          body: pretty,
+          message: `Request failed with HTTP ${res.status}.`,
+        })
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setResponse({
+        kind: 'error',
+        status: null,
+        body: '',
+        message: `Network error: ${message}. (If this is a CORS error, run the curl snippet from your terminal instead.)`,
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   function toggleEvent(ev: EventName | '*') {
     setEvents(prev => {
@@ -176,11 +248,44 @@ export function WebhookConfigurator() {
             >
               Preview snippet
             </button>
-            <button type="button" className="wc-btn wc-btn-primary" disabled>
-              Send live request
+            <button
+              type="button"
+              className="wc-btn wc-btn-primary"
+              onClick={sendLive}
+              disabled={submitting}
+            >
+              {submitting ? 'Sending…' : 'Send live request'}
             </button>
-            <span className="wc-actions-hint">live submit hooked up in next commit</span>
+            <span className="wc-actions-hint">
+              live submit POSTs to <code>api.textbubbles.com</code> from your browser
+            </span>
           </div>
+
+          {response && (
+            <div
+              className={
+                response.kind === 'success' ? 'wc-resp wc-resp-ok' : 'wc-resp wc-resp-err'
+              }
+              role={response.kind === 'error' ? 'alert' : undefined}
+            >
+              <div className="wc-resp-head">
+                {response.kind === 'success'
+                  ? `HTTP ${response.status} — webhook registered`
+                  : response.status
+                    ? `HTTP ${response.status} — ${response.message}`
+                    : response.message}
+              </div>
+              {response.body && (
+                <pre className="wc-pre"><code>{response.body}</code></pre>
+              )}
+              {response.kind === 'success' && (
+                <p className="wc-resp-hint">
+                  If a <code>secret</code> field is present above, copy it now — it cannot be
+                  retrieved later.
+                </p>
+              )}
+            </div>
+          )}
 
           {preview && (
             <div className="wc-output">
@@ -342,6 +447,26 @@ export function WebhookConfigurator() {
           font-size: 0.8rem;
           line-height: 1.5;
         }
+        .wc-resp {
+          margin-top: 1rem;
+          padding: 0.75rem 0.9rem;
+          border: 1px solid;
+          border-radius: 6px;
+        }
+        .wc-resp-ok {
+          border-color: rgba(34, 197, 94, 0.4);
+          background: rgba(34, 197, 94, 0.08);
+        }
+        .wc-resp-err {
+          border-color: rgba(239, 68, 68, 0.4);
+          background: rgba(239, 68, 68, 0.08);
+        }
+        .wc-resp-head {
+          font-weight: 600;
+          font-size: 0.85rem;
+          margin-bottom: 0.5rem;
+        }
+        .wc-resp-hint { font-size: 0.8rem; opacity: 0.75; margin: 0.25rem 0 0; }
       `}</style>
     </div>
   )
