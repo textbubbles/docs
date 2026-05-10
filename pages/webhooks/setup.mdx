@@ -47,10 +47,6 @@ curl -X POST https://api.textbubbles.com/v1/webhooks \
 }
 ```
 
-The `secret` field is returned **only on creation** and **only when you did not supply one**. Store it immediately — it cannot be retrieved later. If you need a new secret, call [Rotate Signing Secret](#rotate-signing-secret).
-
-If you want to manage the secret yourself, pass `"secret": "your_own_value"` in the request body. The API stores it but does not echo it back.
-
 ### Body fields
 
 | Field | Required | Description |
@@ -58,7 +54,40 @@ If you want to manage the secret yourself, pass `"secret": "your_own_value"` in 
 | `url` | yes | HTTPS URL to receive webhook `POST` requests |
 | `events` | yes | Array of event types to subscribe to. Use `["*"]` to subscribe to all current and future events |
 | `name` | no | Human-readable label, up to 100 characters |
-| `secret` | no | Your own HMAC-SHA256 signing secret. If omitted, a random one is generated and returned once |
+| `secret` | no | Your own HMAC-SHA256 signing secret. If omitted, a random one is generated and returned once. See [Signing secret](#signing-secret) below |
+
+### Signing secret
+
+Every webhook delivery is signed with HMAC-SHA256 using a secret that's unique to that webhook. You verify the signature on your endpoint to prove the request came from TextBubbles and wasn't tampered with in transit (see [Signature Verification](#signature-verification)).
+
+You can either let the API generate the secret for you or supply your own.
+
+**Option 1 — let the API generate one (recommended).** Omit `secret` from the create request. The API returns a fresh, cryptographically random secret in the `secret` field of the response, prefixed with `whsec_`. This is the example shown above.
+
+> **The `secret` field is returned only on creation, and only when you did not supply one.** Store it immediately in your secrets manager — it is never returned again by any other endpoint. If you lose it, use [Rotate Signing Secret](#rotate-signing-secret) to mint a new one.
+
+**Option 2 — supply your own.** Useful when you already manage signing keys in your own secrets system (e.g. AWS Secrets Manager, Vault, Doppler) and want the same value on both sides without an extra copy step. Pass `secret` in the request body:
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "TextBubbles Events",
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": ["message.delivered", "message.failed", "message.inbound"],
+    "secret": "whsec_'"$(openssl rand -hex 32)"'"
+  }'
+```
+
+When you supply your own `secret`, the API stores it but does **not** echo it back in the response (or in any subsequent `GET` / `list` response). You are responsible for keeping your copy.
+
+**Choosing a self-supplied secret:**
+
+- Use a high-entropy random value — at least 32 bytes (e.g. `openssl rand -hex 32`). Do not use a human-chosen passphrase.
+- Treat it as opaque bytes. The `whsec_` prefix is a convention to make leaked secrets easier to spot in logs and source control, but the API does not require it.
+- Never commit it to source control. Never reuse it across webhooks — each webhook gets its own.
+- Rotate immediately via [Rotate Signing Secret](#rotate-signing-secret) if you suspect it has leaked. Rotation invalidates the old secret instantly.
 
 ## Wildcard Events
 
