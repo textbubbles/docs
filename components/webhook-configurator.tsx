@@ -13,6 +13,38 @@ const ALL_EVENTS = [
 
 type EventName = (typeof ALL_EVENTS)[number]
 
+type SnippetPreview = {
+  body: Record<string, unknown>
+  curl: string
+  json: string
+}
+
+function buildSnippet(args: {
+  apiKey: string
+  url: string
+  name: string
+  secret: string
+  events: string[]
+}): SnippetPreview {
+  const body: Record<string, unknown> = {
+    url: args.url || 'https://your-server.com/webhooks/textbubbles',
+    events: args.events.length > 0 ? args.events : ['*'],
+  }
+  if (args.name) body.name = args.name
+  if (args.secret) body.secret = args.secret
+
+  const json = JSON.stringify(body, null, 2)
+  const authValue = args.apiKey || 'YOUR_API_KEY'
+  const curl = [
+    `curl -X POST https://api.textbubbles.com/v1/webhooks \\`,
+    `  -H "Authorization: Bearer ${authValue}" \\`,
+    `  -H "Content-Type: application/json" \\`,
+    `  -d '${json}'`,
+  ].join('\n')
+
+  return { body, curl, json }
+}
+
 export function WebhookConfigurator() {
   const [open, setOpen] = useState(false)
   const [apiKey, setApiKey] = useState('')
@@ -20,6 +52,8 @@ export function WebhookConfigurator() {
   const [name, setName] = useState('')
   const [secret, setSecret] = useState('')
   const [events, setEvents] = useState<Set<EventName | '*'>>(new Set(['*']))
+  const [preview, setPreview] = useState<SnippetPreview | null>(null)
+  const [copied, setCopied] = useState(false)
 
   function toggleEvent(ev: EventName | '*') {
     setEvents(prev => {
@@ -126,14 +160,53 @@ export function WebhookConfigurator() {
           </fieldset>
 
           <div className="wc-actions">
-            <button type="button" className="wc-btn wc-btn-secondary" disabled>
+            <button
+              type="button"
+              className="wc-btn wc-btn-secondary"
+              onClick={() => {
+                setPreview(buildSnippet({
+                  apiKey,
+                  url,
+                  name,
+                  secret,
+                  events: Array.from(events),
+                }))
+                setCopied(false)
+              }}
+            >
               Preview snippet
             </button>
             <button type="button" className="wc-btn wc-btn-primary" disabled>
               Send live request
             </button>
-            <span className="wc-actions-hint">(actions hooked up in following commits)</span>
+            <span className="wc-actions-hint">live submit hooked up in next commit</span>
           </div>
+
+          {preview && (
+            <div className="wc-output">
+              <div className="wc-output-head">
+                <span className="wc-label">curl</span>
+                <button
+                  type="button"
+                  className="wc-btn wc-btn-secondary wc-btn-small"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(preview.curl)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 1500)
+                    } catch {
+                      /* clipboard not available — user can still select-copy */
+                    }
+                  }}
+                >
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <pre className="wc-pre"><code>{preview.curl}</code></pre>
+              <span className="wc-label">Request body</span>
+              <pre className="wc-pre"><code>{preview.json}</code></pre>
+            </div>
+          )}
         </div>
       )}
 
@@ -247,6 +320,28 @@ export function WebhookConfigurator() {
           color: white;
         }
         .wc-actions-hint { font-size: 0.8rem; opacity: 0.55; }
+        .wc-btn-small { padding: 0.25rem 0.55rem; font-size: 0.75rem; }
+        .wc-output {
+          margin-top: 1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.4rem;
+        }
+        .wc-output-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .wc-pre {
+          margin: 0 0 0.5rem;
+          padding: 0.7rem 0.9rem;
+          background: rgba(125, 125, 125, 0.1);
+          border: 1px solid rgba(125, 125, 125, 0.2);
+          border-radius: 6px;
+          overflow-x: auto;
+          font-size: 0.8rem;
+          line-height: 1.5;
+        }
       `}</style>
     </div>
   )
