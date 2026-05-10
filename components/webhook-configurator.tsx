@@ -148,9 +148,13 @@ export function WebhookConfigurator() {
         aria-expanded={open}
         onClick={() => setOpen(o => !o)}
       >
-        <span className="wc-toggle-caret" aria-hidden>{open ? '▾' : '▸'}</span>
+        <span
+          className="wc-toggle-caret"
+          aria-hidden
+          style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}
+        >▸</span>
         <span>Configure interactively</span>
-        <span className="wc-toggle-hint">fill in your values to preview the request, or send it live</span>
+        <span className="wc-toggle-hint">preview the request, or send it live</span>
       </button>
 
       {open && (
@@ -317,120 +321,176 @@ export function WebhookConfigurator() {
 
       <style jsx>{`
         .wc-root {
-          margin: 1.5rem 0;
-          border: 1px solid var(--shiki-color-border, rgba(125, 125, 125, 0.3));
-          border-radius: 8px;
-          background: var(--wc-bg, transparent);
+          --wc-primary: hsl(var(--nextra-primary-hue, 211) var(--nextra-primary-saturation, 100%) 50%);
+          --wc-primary-fg: white;
+          --wc-border: rgba(125, 125, 125, 0.25);
+          --wc-border-strong: rgba(125, 125, 125, 0.4);
+          --wc-surface: rgba(125, 125, 125, 0.06);
+          --wc-surface-strong: rgba(125, 125, 125, 0.1);
+          margin: 1.75rem 0;
+          border: 1px solid var(--wc-border);
+          border-radius: 10px;
+          background: var(--wc-surface);
+          overflow: hidden;
         }
         .wc-toggle {
           display: flex;
           align-items: center;
           gap: 0.6rem;
           width: 100%;
-          padding: 0.75rem 1rem;
+          padding: 0.85rem 1.1rem;
           background: transparent;
           border: 0;
           font: inherit;
+          font-weight: 600;
           color: inherit;
           cursor: pointer;
           text-align: left;
+          transition: background 120ms ease;
+        }
+        .wc-toggle:hover { background: var(--wc-surface-strong); }
+        .wc-toggle:focus-visible {
+          outline: 2px solid var(--wc-primary);
+          outline-offset: -2px;
         }
         .wc-toggle-caret {
-          font-size: 0.8rem;
+          font-size: 0.75rem;
           opacity: 0.7;
+          transition: transform 120ms ease;
+          display: inline-block;
+          width: 0.9rem;
         }
         .wc-toggle-hint {
           margin-left: auto;
-          font-size: 0.85rem;
+          font-size: 0.8rem;
+          font-weight: 400;
           opacity: 0.6;
         }
+        @media (max-width: 540px) {
+          .wc-toggle-hint { display: none; }
+        }
         .wc-panel {
-          padding: 0.5rem 1rem 1rem;
-          border-top: 1px solid rgba(125, 125, 125, 0.2);
+          padding: 1rem 1.1rem 1.1rem;
+          border-top: 1px solid var(--wc-border);
+          background: transparent;
         }
         .wc-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 0.75rem 1rem;
+          gap: 0.85rem 1rem;
           margin-bottom: 1rem;
         }
         @media (max-width: 640px) {
           .wc-grid { grid-template-columns: 1fr; }
         }
-        .wc-field { display: flex; flex-direction: column; gap: 0.3rem; }
+        .wc-field { display: flex; flex-direction: column; gap: 0.35rem; }
         .wc-label {
-          font-size: 0.8rem;
+          font-size: 0.75rem;
           font-weight: 600;
-          letter-spacing: 0.02em;
-          opacity: 0.85;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          opacity: 0.75;
         }
-        .wc-optional { font-weight: 400; opacity: 0.6; }
+        .wc-optional { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: 0.7; }
         .wc-input {
-          padding: 0.45rem 0.6rem;
-          border: 1px solid rgba(125, 125, 125, 0.3);
+          padding: 0.5rem 0.65rem;
+          border: 1px solid var(--wc-border-strong);
           border-radius: 6px;
-          background: transparent;
+          background: var(--wc-surface);
           color: inherit;
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
           font-size: 0.85rem;
+          transition: border-color 120ms ease, box-shadow 120ms ease;
         }
+        .wc-input::placeholder { opacity: 0.45; }
         .wc-input:focus {
-          outline: 2px solid rgba(99, 102, 241, 0.4);
-          outline-offset: -1px;
+          outline: none;
+          border-color: var(--wc-primary);
+          box-shadow: 0 0 0 3px hsl(var(--nextra-primary-hue, 211) var(--nextra-primary-saturation, 100%) 50% / 0.18);
         }
         .wc-events {
-          border: 1px solid rgba(125, 125, 125, 0.2);
+          border: 1px solid var(--wc-border);
           border-radius: 6px;
-          padding: 0.6rem 0.8rem 0.4rem;
-          margin: 0 0 1rem;
+          padding: 0.7rem 0.9rem 0.55rem;
+          margin: 0 0 1.1rem;
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 0.3rem 1rem;
+          gap: 0.4rem 1rem;
+          background: var(--wc-surface);
         }
         @media (max-width: 640px) {
           .wc-events { grid-template-columns: 1fr; }
         }
         .wc-events legend {
-          padding: 0 0.3rem;
+          padding: 0 0.4rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          opacity: 0.75;
         }
         .wc-event {
           display: flex;
           align-items: center;
-          gap: 0.4rem;
+          gap: 0.45rem;
           font-size: 0.85rem;
           cursor: pointer;
         }
+        .wc-event input[type="checkbox"] { accent-color: var(--wc-primary); }
+        .wc-event input:disabled + code { opacity: 0.45; }
         .wc-actions {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
+          gap: 0.55rem;
           flex-wrap: wrap;
         }
         .wc-btn {
-          padding: 0.45rem 0.9rem;
+          padding: 0.5rem 1rem;
           border-radius: 6px;
           font: inherit;
           font-size: 0.85rem;
+          font-weight: 500;
           cursor: pointer;
           border: 1px solid transparent;
+          transition: background 120ms ease, border-color 120ms ease, transform 80ms ease;
         }
-        .wc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .wc-btn:active { transform: translateY(1px); }
+        .wc-btn:focus-visible {
+          outline: 2px solid var(--wc-primary);
+          outline-offset: 2px;
+        }
+        .wc-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
         .wc-btn-secondary {
           background: transparent;
-          border-color: rgba(125, 125, 125, 0.4);
+          border-color: var(--wc-border-strong);
           color: inherit;
         }
-        .wc-btn-primary {
-          background: rgb(99, 102, 241);
-          color: white;
+        .wc-btn-secondary:hover:not(:disabled) {
+          background: var(--wc-surface-strong);
+          border-color: var(--wc-primary);
         }
-        .wc-actions-hint { font-size: 0.8rem; opacity: 0.55; }
-        .wc-btn-small { padding: 0.25rem 0.55rem; font-size: 0.75rem; }
+        .wc-btn-primary {
+          background: var(--wc-primary);
+          color: var(--wc-primary-fg);
+        }
+        .wc-btn-primary:hover:not(:disabled) {
+          filter: brightness(1.08);
+        }
+        .wc-actions-hint { font-size: 0.78rem; opacity: 0.6; }
+        .wc-actions-hint code {
+          font-size: 0.78rem;
+          padding: 0.05rem 0.3rem;
+          background: var(--wc-surface-strong);
+          border-radius: 3px;
+        }
+        .wc-btn-small { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
         .wc-output {
-          margin-top: 1rem;
+          margin-top: 1.1rem;
+          padding-top: 0.9rem;
+          border-top: 1px dashed var(--wc-border);
           display: flex;
           flex-direction: column;
-          gap: 0.4rem;
+          gap: 0.45rem;
         }
         .wc-output-head {
           display: flex;
@@ -438,35 +498,35 @@ export function WebhookConfigurator() {
           justify-content: space-between;
         }
         .wc-pre {
-          margin: 0 0 0.5rem;
-          padding: 0.7rem 0.9rem;
-          background: rgba(125, 125, 125, 0.1);
-          border: 1px solid rgba(125, 125, 125, 0.2);
+          margin: 0 0 0.6rem;
+          padding: 0.8rem 1rem;
+          background: var(--wc-surface-strong);
+          border: 1px solid var(--wc-border);
           border-radius: 6px;
           overflow-x: auto;
           font-size: 0.8rem;
-          line-height: 1.5;
+          line-height: 1.55;
         }
         .wc-resp {
-          margin-top: 1rem;
-          padding: 0.75rem 0.9rem;
+          margin-top: 1.1rem;
+          padding: 0.85rem 1rem;
           border: 1px solid;
           border-radius: 6px;
         }
         .wc-resp-ok {
-          border-color: rgba(34, 197, 94, 0.4);
+          border-color: rgba(34, 197, 94, 0.45);
           background: rgba(34, 197, 94, 0.08);
         }
         .wc-resp-err {
-          border-color: rgba(239, 68, 68, 0.4);
+          border-color: rgba(239, 68, 68, 0.45);
           background: rgba(239, 68, 68, 0.08);
         }
         .wc-resp-head {
           font-weight: 600;
           font-size: 0.85rem;
-          margin-bottom: 0.5rem;
+          margin-bottom: 0.55rem;
         }
-        .wc-resp-hint { font-size: 0.8rem; opacity: 0.75; margin: 0.25rem 0 0; }
+        .wc-resp-hint { font-size: 0.8rem; opacity: 0.75; margin: 0.35rem 0 0; }
       `}</style>
     </div>
   )
