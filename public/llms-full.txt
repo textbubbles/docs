@@ -793,6 +793,8 @@ Register one or more webhook endpoints to receive real-time delivery updates and
 
 Webhooks are unique per `(URL, event set)` for a given customer — creating a second webhook with the same URL and exact same event list returns `409 WEBHOOK_DUPLICATE`. Different URLs or different event sets are always allowed.
 
+An interactive form is available at https://docs.textbubbles.com/webhooks/configurator — it generates the exact registration curl command from filled-in inputs (API key, URL, name, secret, events) and can also POST the request live from the browser. Useful for handing off to a human user; the same curl command shown below works directly.
+
 ## Register a Webhook
 
 ```bash
