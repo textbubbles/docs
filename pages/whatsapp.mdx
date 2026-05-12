@@ -16,9 +16,6 @@ TextBubbles supports **WhatsApp** as a first-class send/receive channel alongsid
 | Mentions in groups | ✅ | ✅ |
 | Send to existing groups via `to: "...@g.us"` | ✅ | ✅ |
 | Typing indicators | — | ✅ via `typing.indicator` webhook |
-| Read receipts on outbound (delivered/read) | ✅ via `message.delivered` / `message.read` webhooks | n/a |
-| iMessage-only fields (`effect`, `messageType: "carousel"`) | dropped | n/a |
-| Group create / add / remove participants | not supported | not supported |
 
 ## Pairing a number
 
@@ -44,8 +41,6 @@ Returns an array like:
   "data": [
     {
       "phoneNumber": "+16282895642",
-      "instanceName": "Internal Instance",
-      "isDefault": true,
       "whatsapp": {
         "status": "connected",
         "jid": "16282895642:2@s.whatsapp.net",
@@ -147,8 +142,6 @@ Scans the last 15 minutes of inbound messages to this number for anything matchi
   }
 }
 ```
-
-The detector is deliberately conservative — it matches WhatsApp's specific "`Your WhatsApp code: XXX-XXX`" shape so unrelated inbound messages (Uber OTPs, conversation fragments with numbers) don't show up here.
 
 ## Sending
 

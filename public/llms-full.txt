@@ -1604,8 +1604,6 @@ Or fall back: `["whatsapp", "imessage", "sms"]`. Group sends use `to: "...@g.us"
 - replies (quoted via replyTo): yes / yes
 - mentions (groups only): yes / yes
 - typing indicators inbound: yes (typing.indicator webhook)
-- delivery + read tracking on outbound: yes (message.delivered / message.read webhooks)
-- iMessage `effect` / `messageType: "carousel"`: silently dropped on whatsapp send
 
 ## Reaction type → emoji
 
@@ -1624,7 +1622,7 @@ Or fall back: `["whatsapp", "imessage", "sms"]`. Group sends use `to: "...@g.us"
 
 All endpoints are scoped to numbers the caller's API key owns. Requests for a number not linked to the caller's customer return 403 NUMBER_NOT_OWNED. Phone numbers in the path accept E.164 with or without leading `+`.
 
-- GET /v1/whatsapp — list all owned numbers with { phoneNumber, instanceName, isDefault, whatsapp: { status, jid?, lastConnectedAt?, lastDisconnectedAt?, disconnectReason? } }. whatsapp.status is one of not_enabled, disconnected, connecting, qr_pending, connected.
+- GET /v1/whatsapp — list all owned numbers with { phoneNumber, whatsapp: { status, jid?, lastConnectedAt?, lastDisconnectedAt?, disconnectReason? } }. whatsapp.status is one of not_enabled, disconnected, connecting, qr_pending, connected.
 - POST /v1/whatsapp/numbers/:phoneNumber/enable — create session, start QR flow
 - GET /v1/whatsapp/numbers/:phoneNumber/status — { status, jid, lastConnectedAt, ... }
 - GET /v1/whatsapp/numbers/:phoneNumber/qr — { qrCode } raw string, render with any QR lib
