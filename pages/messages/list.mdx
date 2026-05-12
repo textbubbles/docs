@@ -77,6 +77,14 @@ curl https://api.textbubbles.com/v1/messages/msg_550e8400-e29b-41d4-a716-4466554
 
 Inbound messages are delivered via the `message.inbound` webhook event. To receive them, subscribe to `message.inbound` in your [webhook configuration](/webhooks/events).
 
+### Verification / OTP messages are suppressed
+
+Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes, or other verification codes (e.g. Apple ID, Google, bank account codes) are **not** surfaced through the API. They are:
+
+- **not** dispatched as `message.inbound` webhooks,
+- **not** delivered via the `/v1/events` stream,
+- **not** returned by `GET /v1/messages`
+
 ## Message Statuses
 
 | Status | Description |

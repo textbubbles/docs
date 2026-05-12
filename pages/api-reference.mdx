@@ -162,11 +162,15 @@ curl -H "Authorization: Bearer tb_xxxxx" https://api.textbubbles.com/v1/numbers
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/v1/webhooks` | [Get webhook config](/webhooks/setup#get-current-configuration) |
-| `PUT` | `/v1/webhooks` | [Set webhook URL & events](/webhooks/setup) |
-| `DELETE` | `/v1/webhooks` | [Delete webhook config](/webhooks/setup#delete-webhook-configuration) |
-| `POST` | `/v1/webhooks/test` | [Send a test event to your webhook](/webhooks/setup#send-a-test-event) |
-| `POST` | `/v1/webhooks/rotate-secret` | [Rotate signing secret](/webhooks/setup#rotate-signing-secret) |
+| `POST` | `/v1/webhooks` | [Register a webhook](/webhooks/setup#register-a-webhook) |
+| `GET` | `/v1/webhooks/list` | [List your webhooks](/webhooks/setup#list-your-webhooks) |
+| `GET` | `/v1/webhooks/:id` | [Get a single webhook](/webhooks/setup#get-a-single-webhook) |
+| `PATCH` | `/v1/webhooks/:id` | [Update a webhook](/webhooks/setup#update-a-webhook) |
+| `DELETE` | `/v1/webhooks/:id` | [Delete a webhook](/webhooks/setup#delete-a-webhook) |
+| `POST` | `/v1/webhooks/:id/test` | [Send a test event to a webhook](/webhooks/setup#send-a-test-event) |
+| `POST` | `/v1/webhooks/:id/rotate-secret` | [Rotate signing secret](/webhooks/setup#rotate-signing-secret) |
+| `GET` / `PUT` / `DELETE` | `/v1/webhooks` | Legacy single-webhook endpoints ([deprecated](/webhooks/setup#legacy-single-webhook-endpoints)) |
+| `POST` | `/v1/webhooks/test`, `/v1/webhooks/rotate-secret` | Legacy single-webhook endpoints ([deprecated](/webhooks/setup#legacy-single-webhook-endpoints)) |
 
 ## Health Check
 
@@ -185,7 +189,7 @@ The health check endpoint requires no authentication and is not rate-limited. It
   "checks": {
     "database": { "status": "ok" },
     "redis": { "status": "ok" },
-    "bluebubbles": { "status": "ok" },
+    "imessage": { "status": "ok" },
     "whatsapp": {
       "status": "not_enabled",
       "experimental": true
@@ -194,13 +198,13 @@ The health check endpoint requires no authentication and is not rate-limited. It
 }
 ```
 
-The top-level `status` is `"ok"` when the database and Redis are both reachable, or `"degraded"` if either is down. BlueBubbles and WhatsApp statuses are reported for visibility but do not affect the top-level status.
+The top-level `status` is `"ok"` when the database and Redis are both reachable, or `"degraded"` if either is down. iMessage and WhatsApp statuses are reported for visibility but do not affect the top-level status.
 
-SMS fallback is handled natively by iMessage on the Mac mini — when an iMessage send fails to a non-iMessage recipient, Messages.app automatically falls back to SMS via the connected iPhone. There is no separate SMS provider to monitor.
+SMS fallback is handled natively by the iMessage provider — when an iMessage send fails to a non-iMessage recipient, the provider automatically falls back to SMS via a connected iPhone. There is no separate SMS provider to monitor.
 
 ### Instance Health Status
 
-Each BlueBubbles instance is independently monitored every 2 minutes. Instance health is stored as one of four values:
+Each iMessage provider instance is independently monitored every 2 minutes. Instance health is stored as one of four values:
 
 | Status | Meaning |
 |--------|---------|
@@ -216,9 +220,9 @@ When an instance has `degraded` status, the response includes an array of warnin
 | Condition | Warning | Impact |
 |-----------|---------|--------|
 | Private API disabled | "Private API is disabled" | Typing indicators, reactions, read receipts, and FaceTime events will not work |
-| Private API helper disconnected | "Private API helper is not connected" | Same features as above are unavailable; restart the helper from the BlueBubbles GUI to resolve |
+| Private API helper disconnected | "Private API helper is not connected" | Same features as above are unavailable; requires operator intervention to resolve |
 | No iMessage account detected | "No iMessage account detected" | iMessage and FaceTime will not work on this instance |
-| No iCloud account detected | "No iCloud account detected" | Sign in to iCloud on the Mac hosting this instance to resolve |
+| No iCloud account detected | "No iCloud account detected" | iMessage and FaceTime will not work on this instance; requires operator intervention to resolve |
 
 An instance can have multiple warnings at the same time. Warnings are cleared automatically when the next health check finds the condition resolved.
 
@@ -236,17 +240,24 @@ An instance can have multiple warnings at the same time. Warnings are cleared au
 | `REPLY_NOT_FOUND` | 404 | Reply target message not found |
 | `CHANNEL_NOT_SUPPORTED` | 400 | Operation not supported on channel |
 | `NO_CHANNEL_AVAILABLE` | 400 | Recipient not reachable |
+| `INVALID_RECIPIENT` | 400 | Must provide exactly one of `to` or `conversationId` on send |
+| `CONVERSATION_NOT_FOUND` | 404 | `conversationId` does not match any conversation for this customer |
+| `CONVERSATION_NOT_READY` | 409 | Conversation has no provider chat yet; retry after the chat is created |
+| `GROUP_SMS_UNSUPPORTED` | 400 | Group send is not supported on SMS; send to participants individually |
 | `INVALID_STATUS` | 400 | Operation not valid for current message status |
 | `MISSING_EXTERNAL_ID` | 400 | Message has no external provider ID |
 | `ALREADY_UNSENT` | 409 | Message already unsent |
 | `ALREADY_DELETED` | 409 | Message already deleted |
+| `WEBHOOK_NOT_FOUND` | 404 | Webhook does not exist or does not belong to your customer |
+| `WEBHOOK_DUPLICATE` | 409 | A webhook with this URL and event set already exists |
+| `WEBHOOK_NOT_CONFIGURED` | 404 | No webhook registered (legacy single-webhook endpoints only) |
 | `NOT_SCHEDULED` | 400 | Message is not in scheduled status |
 | `INVALID_SCHEDULED_AT` | 400 | Invalid ISO 8601 datetime format |
 | `SCHEDULED_IN_PAST` | 400 | Scheduled time is in the past |
 | `SCHEDULED_TOO_FAR` | 400 | Scheduled time is more than 30 days away |
 | `DEPRECATED` | 410 | Endpoint has been deprecated |
 | `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
-| `BLUEBUBBLES_TIMEOUT` | 504 | Upstream iMessage service timed out |
+| `PROVIDER_TIMEOUT` | 504 | Upstream iMessage service timed out |
 | `EDIT_FAILED` | 502 | Message edit could not be completed |
 | `IMESSAGE_SEND_FAILED` | 500 | iMessage delivery error |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |

@@ -69,6 +69,8 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 
 TextBubbles exposes two ways to send non-text content on a message, and they map to different channels. Picking the wrong one is the most common source of "my image didn't send" bugs, so here is the decision rule.
 
+> **Text is optional when you send media.** Every request must include at least one of `content.text` (non-empty), `content.mediaUrls`, or `attachments[]`. You can send an attachment-only message — voice note, image with no caption, etc. — by omitting `content.text` or passing an empty string. Sending a request with no text, no `mediaUrls`, and no `attachments[]` returns `400`.
+
 | Use | Field | Channels | Source types | Notes |
 |-----|-------|----------|--------------|-------|
 | Send a file (photo, video, PDF, audio, any MIME type) over **iMessage** | `attachments[]` | iMessage only | `type: "url"` (HTTPS) or `type: "base64"` | Full iMessage attachment semantics. Required for non-image files. |
@@ -124,6 +126,33 @@ curl -X POST https://api.textbubbles.com/v1/messages \
     "routing": { "preference": ["sms"] }
   }'
 ```
+
+## Voice Memos
+
+To send an audio file as a native iMessage voice-memo bubble (inline player with waveform) instead of a generic file attachment, set `isAudioMessage: true` on the attachment. Voice memos are attachment-only — either omit `content.text` (send `"content": {}`) or pass `"text": ""`. Both are accepted.
+
+Accepted formats: any audio (MP3, Opus/AAC/PCM in CAF, webm, m4a, ogg, wav, …). The server normalizes non-compatible inputs to Opus-in-CAF — the format iMessage's voice-memo UI can read. If you can, encode client-side to Opus-in-CAF to skip the extra server transcode.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": {},
+    "attachments": [
+      {
+        "type": "url",
+        "url": "https://example.com/voicenote.caf",
+        "mimeType": "audio/x-caf",
+        "filename": "voicenote.caf",
+        "isAudioMessage": true
+      }
+    ]
+  }'
+```
+
+Without `isAudioMessage: true`, the audio file arrives as a generic file attachment that the recipient must tap to download.
 
 ## Base64 Attachments
 
@@ -229,6 +258,30 @@ curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/unsend \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
+## Retry a Failed Message
+
+Re-send a message that previously landed in `status: failed` (for example, because of a transient delivery failure). Only messages currently in `status: failed` can be retried — messages that are still `queued`, `sent`, or in any other state return `400 INVALID_STATUS`.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/retry \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Response (`202 Accepted`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_abc123",
+    "status": "queued",
+    "retryCount": 1
+  }
+}
+```
+
+The retry preserves the original recipient, content, attachments, routing preferences, and instance. A fresh provider message ID is issued on the new send — from iMessage's perspective this is a new send that carries the same TextBubbles message ID. You can call this endpoint multiple times; `retryCount` increments on each attempt. Watch the usual `message.queued` → `message.sent` / `message.failed` webhooks to track the outcome.
+
 ## Edit a Message
 
 Update sent message content (iMessage only):
@@ -273,7 +326,11 @@ If a message with the same key already exists, the API returns `200 OK` with the
 | `replyTo` | string | No | Message ID to reply to (iMessage only) |
 | `attachments` | object[] | No | File attachments (iMessage only) |
 | `attachments[].type` | string | No | Attachment type: `"url"` or `"base64"` |
+| `attachments[].url` | string | No | URL of the attachment (when type is `url`) |
 | `attachments[].data` | string | No | Base64-encoded file data (when type is `base64`) |
+| `attachments[].mimeType` | string | No | MIME type of the attachment |
+| `attachments[].filename` | string | No | Original filename |
+| `attachments[].isAudioMessage` | boolean | No | Render as a native iMessage voice-memo bubble (inline player). Accepts any audio format — the server transcodes non-compatible inputs (anything except Opus-in-CAF) to Opus-in-CAF. iMessage only. |
 | `effect` | string | No | Message effect (iMessage only) |
 | `scheduledAt` | string | No | ISO 8601 datetime for scheduled delivery |
 | `idempotencyKey` | string | No | Unique key for deduplication |

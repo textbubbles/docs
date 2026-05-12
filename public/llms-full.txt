@@ -106,18 +106,19 @@ curl https://api.textbubbles.com/v1/capabilities/+14155551234 \
 
 ## 5. Set Up Webhooks
 
-Receive real-time delivery updates and inbound messages:
+Register one or more webhooks to receive real-time delivery updates and inbound messages. Each has its own URL, event subscription list, and signing secret:
 
 ```bash
-curl -X PUT https://api.textbubbles.com/v1/webhooks \
+curl -X POST https://api.textbubbles.com/v1/webhooks \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://your-server.com/webhooks/textbubbles",
-    "events": ["message.sent", "message.delivered", "message.inbound"],
-    "secret": "whsec_your_signing_secret"
+    "events": ["message.sent", "message.delivered", "message.inbound"]
   }'
 ```
+
+If you omit `secret`, the API generates one and returns it in the response — store it immediately, it cannot be retrieved later.
 
 ---
 
@@ -434,6 +435,30 @@ curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/unsend \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
+## Retry a Failed Message — POST /v1/messages/:id/retry
+
+Re-send a message that previously landed in `status: failed` (for example, after a transient delivery failure). Only `failed` messages can be retried — `queued`, `sent`, or any other status returns `400 INVALID_STATUS`.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/retry \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Response (`202 Accepted`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_abc123",
+    "status": "queued",
+    "retryCount": 1
+  }
+}
+```
+
+The retry preserves the original recipient, content, attachments, routing preferences, and instance. A fresh provider message ID is issued on the new send — from iMessage's perspective this is a new send that carries the same TextBubbles message ID. This endpoint is idempotent to call multiple times; `retryCount` increments on each invocation. Standard `message.queued` → `message.sent` / `message.failed` webhooks fire for the outcome.
+
 ## Edit a Message
 
 Update sent message content (iMessage only):
@@ -465,13 +490,46 @@ Include an `idempotencyKey` to prevent duplicate sends during retries:
 
 If a message with the same key already exists, the API returns 200 OK with the existing message.
 
+## Group Chats — POST /v1/messages with conversationId
+
+Send into an existing group chat (or any pinned conversation) by passing `conversationId` instead of `to`. The `conversationId` is returned from `POST /v1/chats/groups`. Exactly one of `to` or `conversationId` must be provided.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
+    "content": { "text": "Hey team" }
+  }'
+```
+
+When `conversationId` is used:
+- The channel is pinned to whatever the conversation was created on; `routing` and `fallback` are ignored.
+- Group send on SMS is not supported; returns 400 GROUP_SMS_UNSUPPORTED.
+- `createContact` is ignored (no single recipient).
+
+Create a group:
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/groups \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "participants": ["+14155551234", "+14155559876"], "name": "Launch Team" }'
+```
+
+Response data: `{ chatId, conversationId, participants, name, createdAt }`. Use `conversationId` for sends; `chatId` for chat-level endpoints (rename, add/remove participant, leave).
+
 ## Full Request Schema — POST /v1/messages
+
+Every request must include at least one of `content.text` (non-empty), `content.mediaUrls`, or `attachments[]`. A request with no text, no mediaUrls, and no attachments returns 400.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| to | string | Yes | Recipient phone number (E.164) or iMessage email address |
+| to | string | Conditionally | Recipient phone number (E.164) or iMessage email address. Required unless conversationId is provided. |
+| conversationId | string | Conditionally | UUID of an existing conversation for group or pinned sends. Required unless to is provided. |
 | from | string | No | Sender address (must be authorized; uses default if omitted) |
-| content.text | string | No | Message text (up to 10,000 chars). Optional if content.mediaUrls is provided |
+| content.text | string | No | Message text (up to 10,000 chars). Optional if content.mediaUrls or attachments[] is provided. May be omitted or empty for attachment-only messages (voice notes, images with no caption). |
 | content.mediaUrls | string[] | No | Array of 1-20 HTTPS image URLs. When 2+ URLs are provided, sends as an image carousel |
 | routing.preference | string[] | No | Channel priority (default: ["imessage", "sms"]) |
 | routing.fallback | boolean | No | Enable fallback (default: true) |
@@ -482,6 +540,7 @@ If a message with the same key already exists, the API returns 200 OK with the e
 | attachments[].data | string | No | Base64-encoded file data (when type is "base64") |
 | attachments[].mimeType | string | No | MIME type (e.g., image/jpeg) |
 | attachments[].filename | string | No | Original filename |
+| attachments[].isAudioMessage | boolean | No | Render as a native iMessage voice-memo bubble (inline player) instead of a generic file attachment. Accepts any audio format — the server normalizes non-compatible inputs (anything except MP3 or Opus-in-CAF) to Opus-in-CAF before forwarding to iMessage. iMessage only. |
 | effect | string | No | Message effect (iMessage only): slam, loud, gentle, invisibleInk, confetti, fireworks, lasers, love, balloons, spotlight, echo |
 | scheduledAt | string | No | ISO 8601 datetime for scheduled delivery (max 30 days ahead) |
 | idempotencyKey | string | No | Unique key for deduplication (max 255 chars) |
@@ -581,6 +640,14 @@ Response:
 ## Inbound Messages
 
 Inbound messages are delivered via the `message.inbound` webhook event. Subscribe to `message.inbound` in your webhook configuration.
+
+### Verification / OTP codes are suppressed
+
+Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes, or other verification codes (e.g. Apple ID, Google, bank account codes) are NOT surfaced through the API:
+
+- not dispatched as `message.inbound` webhooks
+- not delivered via the `/v1/events` stream
+- not returned by `GET /v1/messages` or `GET /v1/messages/:id`
 
 ## Message Endpoints
 
@@ -722,15 +789,18 @@ Add visual effects to iMessage messages using the `effect` field. Effects are si
 
 # Webhook Configuration
 
-Configure a webhook endpoint to receive real-time delivery updates and inbound messages. Each customer has their own isolated webhook configuration.
+Register one or more webhook endpoints to receive real-time delivery updates and inbound messages. Each customer can register any number of webhooks; each has its own URL, event subscription list, optional name, and own signing secret. A single event is fanned out to every webhook that subscribed to that event type.
 
-## Set Up Your Webhook
+Webhooks are unique per `(URL, event set)` for a given customer — creating a second webhook with the same URL and exact same event list returns `409 WEBHOOK_DUPLICATE`. Different URLs or different event sets are always allowed.
+
+## Register a Webhook
 
 ```bash
-curl -X PUT https://api.textbubbles.com/v1/webhooks \
+curl -X POST https://api.textbubbles.com/v1/webhooks \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "name": "TextBubbles Events",
     "url": "https://your-server.com/webhooks/textbubbles",
     "events": [
       "message.queued",
@@ -738,33 +808,8 @@ curl -X PUT https://api.textbubbles.com/v1/webhooks \
       "message.delivered",
       "message.failed",
       "message.inbound"
-    ],
-    "secret": "whsec_your_signing_secret"
+    ]
   }'
-```
-
-## Wildcard Events
-
-Subscribe to all events at once using the wildcard *:
-
-```bash
-curl -X PUT https://api.textbubbles.com/v1/webhooks \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://your-server.com/webhooks/textbubbles",
-    "events": ["*"],
-    "secret": "whsec_your_signing_secret"
-  }'
-```
-
-This automatically subscribes to all current and future event types.
-
-## Get Current Configuration
-
-```bash
-curl https://api.textbubbles.com/v1/webhooks \
-  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 Response:
@@ -773,16 +818,110 @@ Response:
 {
   "success": true,
   "data": {
+    "id": "b1a9e4e6-...-9f21",
+    "name": "TextBubbles Events",
     "url": "https://your-server.com/webhooks/textbubbles",
-    "events": ["message.sent", "message.delivered", "message.inbound"],
+    "events": ["message.delivered", "message.failed"],
     "active": true,
-    "createdAt": "2026-03-28T10:00:00.000Z",
-    "updatedAt": "2026-03-28T10:00:00.000Z"
+    "secret": "whsec_generated_signing_secret_value",
+    "createdAt": "2026-04-21T10:00:00.000Z",
+    "updatedAt": "2026-04-21T10:00:00.000Z"
   }
 }
 ```
 
-Returns `null` if no webhook is configured for your customer.
+The `secret` field is returned only on creation and only when you did not supply one. Store it immediately — it cannot be retrieved later.
+
+Body fields:
+
+- `url` (required) — HTTPS URL to receive webhook POST requests
+- `events` (required) — array of event types; use `["*"]` to subscribe to all
+- `name` (optional) — human-readable label, up to 100 characters
+- `secret` (optional) — your own HMAC-SHA256 signing secret. If omitted one is generated and returned once
+
+## Wildcard Events
+
+Subscribe to every event type with `*`:
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": ["*"]
+  }'
+```
+
+## List Webhooks
+
+```bash
+curl https://api.textbubbles.com/v1/webhooks/list \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Returns an array of your registered webhooks. Secrets are never returned in list or get responses.
+
+## Get a Single Webhook
+
+```bash
+curl https://api.textbubbles.com/v1/webhooks/{id} \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Returns `404 WEBHOOK_NOT_FOUND` if the webhook does not exist or does not belong to your customer.
+
+## Update a Webhook
+
+```bash
+curl -X PATCH https://api.textbubbles.com/v1/webhooks/{id} \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": ["message.delivered", "message.failed"]
+  }'
+```
+
+Updatable fields: `url`, `events`, `secret`, `name`, `active`. Setting `active: false` pauses the webhook without deleting it.
+
+Returns `409 WEBHOOK_DUPLICATE` on collision, `404 WEBHOOK_NOT_FOUND` if not yours.
+
+## Delete a Webhook
+
+```bash
+curl -X DELETE https://api.textbubbles.com/v1/webhooks/{id} \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+## Send a Test Event to a Webhook
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/webhooks/{id}/test \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Delivers a synthetic `webhook.test` event to one specific webhook, signed with its own secret.
+
+## Rotate a Webhook's Signing Secret
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/webhooks/{id}/rotate-secret \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Returns the new secret plaintext in the response. It cannot be retrieved later — store it immediately.
+
+## Legacy Single-Webhook Endpoints (deprecated)
+
+These operate against your first active webhook (oldest `createdAt`) and are kept for backward compatibility:
+
+- `GET /v1/webhooks` — returns the first active webhook or `null`
+- `PUT /v1/webhooks` — deactivates all your active webhooks and creates a single new one
+- `DELETE /v1/webhooks` — deactivates all your active webhooks
+- `POST /v1/webhooks/test` — tests the first active webhook
+- `POST /v1/webhooks/rotate-secret` — rotates the first active webhook's secret
+
+New integrations should use the id-scoped endpoints above.
 
 ## Signature Verification
 
@@ -790,6 +929,14 @@ Every webhook request includes two headers:
 
 - X-Signature — `sha256={hmac_hex}` HMAC-SHA256 signature
 - X-Timestamp — Unix timestamp (seconds) when the webhook was sent
+
+Each webhook signs with its own secret — the one you supplied on create, or the one the API generated and returned once. If you have multiple webhooks, each endpoint must verify using that specific webhook's secret.
+
+### Correlation Header
+
+Every webhook delivery also carries:
+
+- X-Correlation-Id — `cor_{32 hex chars}` correlation id that ties the delivery back to the originating message lifecycle. The same id is accepted on every API request (you can supply your own; one is minted otherwise) and echoed on every API response, so you can stitch your logs to ours. Treat it as opaque. If you supply one it must match `cor_<32 hex chars>`; anything else is replaced with a freshly minted id.
 
 ### Verification Steps
 
@@ -938,13 +1085,25 @@ Every webhook event follows this structure:
 | message.read | Read receipt received (iMessage and WhatsApp — WhatsApp only when the recipient has read receipts enabled) |
 | message.failed | Message delivery failed |
 | message.fallback | Fallback triggered (e.g., iMessage to SMS) |
-| message.inbound | Inbound message received |
+| message.inbound | Inbound message received (verification/OTP codes are suppressed — see Inbound Messages section) |
 | message.reaction | Tapback or emoji reaction added or removed |
+| message.audio_kept | Contact tapped "Keep" on a voice note you sent (iMessage only) |
 | message.unsent | Message was unsent/retracted |
 | message.edited | Message was successfully edited (iMessage only) |
 | message.edit_failed | Message edit failed (iMessage only) |
 | message.deleted | Message was soft-deleted |
 | typing.indicator | Recipient is typing (WhatsApp only) |
+
+## Chat Events
+
+Fired when a contact performs a chat-state action (iMessage group chats).
+
+| Event | Description |
+|-------|-------------|
+| chat.participant.added | Participant added to a group chat |
+| chat.participant.left | Participant removed from (or left) a group chat |
+| chat.title.changed | Group chat title set or changed |
+| chat.photo.changed | Group chat photo updated |
 
 ## Scheduled Message Events
 
@@ -973,40 +1132,8 @@ Fired when an incoming FaceTime call is detected on an instance.
   "to": "+19876543210",
   "isAudio": false,
   "isVideo": true,
-  "answerUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/answer",
-  "leaveUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/leave",
   "timestamp": 1711584000000
 }
-```
-
-### Answering a FaceTime call
-
-```bash
-curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/answer \
-  -H "Authorization: Bearer YOUR_API_KEY"
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "data": {
-    "callUuid": "call-uuid-123",
-    "facetimeLink": "https://facetime.apple.com/join#v=1&p=..."
-  }
-}
-```
-
-The returned facetimeLink is a shareable FaceTime Link that works on any device:
-- Apple devices (iPhone, iPad, Mac) — opens FaceTime natively
-- Android and Windows — opens in the browser via WebRTC (no app required)
-
-To hang up a call:
-
-```bash
-curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/leave \
-  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 ### facetime.status_changed
@@ -1021,9 +1148,7 @@ curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/leave \
   "status": "answered",
   "isAudio": false,
   "isVideo": true,
-  "isOutgoing": false,
-  "answerUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/answer",
-  "leaveUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/leave"
+  "isOutgoing": false
 }
 ```
 
@@ -1032,12 +1157,12 @@ curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/leave \
 | Field | Description |
 |-------|-------------|
 | callUuid | Unique identifier for the call session |
-| to | Phone number or email of the receiving BlueBubbles instance |
+| caller / address | Phone number or email of the other party. facetime.incoming uses caller; facetime.status_changed uses address |
+| to | Phone number or email of the receiving iMessage instance |
 | isAudio / isVideo | FaceTime Audio: isAudio=true, isVideo=false. FaceTime Video: isAudio=false, isVideo=true |
-| answerUrl | POST to answer and get a shareable FaceTime Link. Requires API key |
-| leaveUrl | POST to hang up. Requires API key |
 | status | Call status: incoming, answered, disconnected, missed, rejected, failed |
 | isOutgoing | Whether the call was initiated by the instance (true) or received (false) |
+| timestamp | Unix epoch milliseconds when the call was detected. Present on facetime.incoming events |
 
 ## Inbound Message Payload
 
@@ -1129,8 +1254,106 @@ Emoji reactions (iOS 17+):
 | reaction.type | love, like, dislike, laugh, emphasize, question, emoji, remove |
 | reaction.emoji | Emoji character (only when type is "emoji") |
 | reaction.targetMessageId | Internal message ID (null if not found) |
-| reaction.targetExternalId | BlueBubbles GUID of original message |
+| reaction.targetExternalId | Provider-assigned GUID of original message |
 | reaction.content | Human-readable description (null for emoji) |
+
+## Audio Kept Events
+
+Fired when a contact taps "Keep" on a voice note you sent. iMessage auto-deletes voice notes after two minutes unless the recipient keeps them — tapping Keep is an explicit retention signal, useful as a lightweight engagement event.
+
+```json
+{
+  "id": "evt_audio_kept_123",
+  "type": "message.audio_kept",
+  "timestamp": "2026-04-21T09:17:46.007Z",
+  "data": {
+    "externalMessageId": "D6ADF04F-EF82-45F6-BF46-CF7F2B20C9AE",
+    "targetMessageId": "msg_cdf628ad-3ed3-49aa-a10f-a0ea19c9220c",
+    "targetExternalId": "4DE4DB87-1681-4DC7-A77B-3967BCA74BF7",
+    "from": "+14155551234",
+    "to": "+13105550199",
+    "channel": "imessage"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| externalMessageId | Provider-assigned GUID of the Keep system event itself |
+| targetMessageId | Internal message ID of the kept audio. null if the audio predates our retention or was sent through a different iMessage instance |
+| targetExternalId | Provider-assigned GUID of the kept audio — always populated |
+| from | Contact who tapped Keep |
+| to | Instance phone number the audio was sent from |
+
+## Chat Event Payloads
+
+All four chat events share the same envelope: `externalMessageId` (provider-assigned GUID of the underlying system event), `chatId` (provider chat identifier), `actor` (who performed the action), `to` (instance phone), `channel: "imessage"`.
+
+### chat.participant.added / chat.participant.left
+
+```json
+{
+  "id": "evt_participant_added",
+  "type": "chat.participant.added",
+  "timestamp": "2026-04-21T10:00:00.000Z",
+  "data": {
+    "externalMessageId": "<system-event-guid>",
+    "chatId": "iMessage;+;chat1234567890",
+    "participant": "+14155551235",
+    "actor": "+14155551234",
+    "to": "+13105550199",
+    "channel": "imessage"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| chatId | Provider chat identifier |
+| participant | Contact added to (or removed from) the chat |
+| actor | Contact who performed the action |
+
+### chat.title.changed
+
+```json
+{
+  "id": "evt_title_changed",
+  "type": "chat.title.changed",
+  "timestamp": "2026-04-21T10:05:00.000Z",
+  "data": {
+    "externalMessageId": "<system-event-guid>",
+    "chatId": "iMessage;+;chat1234567890",
+    "title": "Weekend plans",
+    "actor": "+14155551234",
+    "to": "+13105550199",
+    "channel": "imessage"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| title | The new chat title |
+| actor | Contact who changed the title |
+
+### chat.photo.changed
+
+```json
+{
+  "id": "evt_photo_changed",
+  "type": "chat.photo.changed",
+  "timestamp": "2026-04-21T10:10:00.000Z",
+  "data": {
+    "externalMessageId": "<system-event-guid>",
+    "chatId": "iMessage;+;chat1234567890",
+    "actor": "+14155551234",
+    "to": "+13105550199",
+    "channel": "imessage"
+  }
+}
+```
+
+The event does not include the new photo — retrieve it through the chat resource.
 
 ---
 
@@ -1266,7 +1489,7 @@ No authentication required. Not rate-limited.
   "checks": {
     "database": { "status": "ok" },
     "redis": { "status": "ok" },
-    "bluebubbles": { "status": "ok" },
+    "imessage": { "status": "ok" },
     "whatsapp": {
       "status": "not_enabled",
       "experimental": true
@@ -1275,7 +1498,7 @@ No authentication required. Not rate-limited.
 }
 ```
 
-Top-level status is "ok" when database and Redis are reachable, "degraded" if either is down. SMS fallback is handled natively by iMessage on the Mac mini (Messages.app falls back via the connected iPhone when iMessage fails), so there is no separate SMS provider to monitor.
+Top-level status is "ok" when database and Redis are reachable, "degraded" if either is down. SMS fallback is handled natively by the iMessage provider (falls back via a connected iPhone when iMessage delivery fails), so there is no separate SMS provider to monitor.
 
 ## Instance Health Statuses
 
@@ -1302,6 +1525,10 @@ Top-level status is "ok" when database and Redis are reachable, "degraded" if ei
 | REPLY_NOT_FOUND | 404 | Reply target message not found |
 | CHANNEL_NOT_SUPPORTED | 400 | Operation not supported on channel |
 | NO_CHANNEL_AVAILABLE | 400 | Recipient not reachable |
+| INVALID_RECIPIENT | 400 | Must provide exactly one of `to` or `conversationId` on send |
+| CONVERSATION_NOT_FOUND | 404 | `conversationId` does not match any conversation for this customer |
+| CONVERSATION_NOT_READY | 409 | Conversation has no provider chat yet; retry after the chat is created |
+| GROUP_SMS_UNSUPPORTED | 400 | Group send is not supported on SMS; send to participants individually |
 | INVALID_STATUS | 400 | Operation not valid for current status |
 | MISSING_EXTERNAL_ID | 400 | Message has no external provider ID |
 | ALREADY_UNSENT | 409 | Message already unsent |
@@ -1312,7 +1539,7 @@ Top-level status is "ok" when database and Redis are reachable, "degraded" if ei
 | SCHEDULED_TOO_FAR | 400 | Scheduled time is more than 30 days away |
 | DEPRECATED | 410 | Endpoint has been deprecated |
 | RATE_LIMIT_EXCEEDED | 429 | Too many requests |
-| BLUEBUBBLES_TIMEOUT | 504 | Upstream iMessage service timed out |
+| PROVIDER_TIMEOUT | 504 | Upstream iMessage service timed out |
 | EDIT_FAILED | 502 | Message edit could not be completed |
 | IMESSAGE_SEND_FAILED | 500 | iMessage delivery error |
 | INTERNAL_ERROR | 500 | Unexpected server error |
@@ -1328,6 +1555,7 @@ Base URL: https://api.textbubbles.com
 - GET /v1/messages — List messages
 - GET /v1/messages/:id — Get message status
 - POST /v1/messages/:id/unsend — Unsend a message (iMessage only)
+- POST /v1/messages/:id/retry — Retry a failed message (new provider ID, same TextBubbles ID)
 - PUT /v1/messages/:id — Edit a message (iMessage only)
 - POST /v1/messages/:id/reactions — Send tapback reaction
 - DELETE /v1/messages/:id — Soft-delete a message
@@ -1341,12 +1569,14 @@ Base URL: https://api.textbubbles.com
 - GET /v1/numbers — List available sender addresses
 
 ## Webhooks
-- GET /v1/webhooks — Get webhook config
-- PUT /v1/webhooks — Set webhook URL and events
-
-## FaceTime
-- POST /v1/facetime/:callUuid/answer — Answer incoming call
-- POST /v1/facetime/:callUuid/leave — Leave/hang up call
+- POST /v1/webhooks — Register a webhook (url, events, optional secret/name)
+- GET /v1/webhooks/list — List all registered webhooks
+- GET /v1/webhooks/{id} — Get a single webhook
+- PATCH /v1/webhooks/{id} — Update url/events/secret/name or pause with active=false
+- DELETE /v1/webhooks/{id} — Remove a webhook
+- POST /v1/webhooks/{id}/test — Deliver a synthetic webhook.test event to one webhook
+- POST /v1/webhooks/{id}/rotate-secret — Rotate the signing secret for one webhook
+- GET /v1/webhooks, PUT /v1/webhooks, DELETE /v1/webhooks, POST /v1/webhooks/test, POST /v1/webhooks/rotate-secret — deprecated single-webhook variants
 
 ## System
 - GET /health — Health check (no auth required)

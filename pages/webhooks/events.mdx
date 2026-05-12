@@ -2,6 +2,8 @@
 
 All webhook event types and their payloads.
 
+> **Fan-out:** if you have multiple webhooks registered and more than one is subscribed to an event type, each subscribed webhook receives its own delivery of that event — signed with that webhook's own secret. See [Webhook Configuration](./setup.mdx) for how to register multiple webhooks.
+
 ## Payload Structure
 
 Every webhook event follows this structure:
@@ -34,14 +36,26 @@ Every webhook event follows this structure:
 | `message.read` | Read receipt received (iMessage and WhatsApp — WhatsApp only when the recipient has read receipts enabled) |
 | `message.failed` | Message delivery failed |
 | `message.fallback` | Fallback triggered (e.g., iMessage to SMS) |
-| `message.inbound` | Inbound message received from a contact |
+| `message.inbound` | Inbound message received from a contact (verification/OTP codes are suppressed — see below) |
 | `message.reaction` | Tapback or emoji reaction added or removed |
+| `message.audio_kept` | Contact tapped "Keep" on a voice note you sent (iMessage only) |
 | `message.unsent` | Message was unsent/retracted |
 | `message.edited` | Message was successfully edited |
 | `message.edit_failed` | Message edit failed |
 | `message.deleted` | Message was soft-deleted |
 | `typing.indicator` | Recipient is typing (WhatsApp only; see [Typing Indicator](#typing-indicator) below) |
 | `whatsapp.status` | WhatsApp session changed pairing state (`qr_pending` / `connecting` / `connected` / `disconnected`). Realtime-only — not sent to webhook URLs; subscribe via the [Realtime/SSE stream](#realtime-sse-stream) |
+
+## Chat Events
+
+Fired when a contact performs a chat-state action — currently sourced from iMessage group-chat updates. Customers typically use these to keep a local mirror of chat metadata in sync.
+
+| Event | Description |
+|-------|-------------|
+| `chat.participant.added` | A participant was added to a group chat |
+| `chat.participant.left` | A participant was removed from (or left) a group chat |
+| `chat.title.changed` | A group chat's title was set or changed |
+| `chat.photo.changed` | A group chat's photo was updated |
 
 ## Scheduled Message Events
 
@@ -70,44 +84,8 @@ Fired when an incoming FaceTime call is detected on an instance.
   "to": "+19876543210",
   "isAudio": false,
   "isVideo": true,
-  "answerUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/answer",
-  "leaveUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/leave",
   "timestamp": 1711584000000
 }
-```
-
-### Answering a FaceTime call
-
-When you receive a `facetime.incoming` webhook, you can answer the call programmatically:
-
-```bash
-curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/answer \
-  -H "Authorization: Bearer YOUR_API_KEY"
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "callUuid": "call-uuid-123",
-    "facetimeLink": "https://facetime.apple.com/join#v=1&p=..."
-  }
-}
-```
-
-The returned `facetimeLink` is a **shareable FaceTime Link** that works on any device:
-- **Apple devices** (iPhone, iPad, Mac) — opens FaceTime natively
-- **Android and Windows** — opens in the browser via WebRTC (no app required)
-
-The flow: our server answers the call, generates a shareable link, admits anyone who joins via the link, then leaves — acting as an automated receptionist.
-
-To hang up a call:
-
-```bash
-curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/leave \
-  -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 ### `facetime.status_changed`
@@ -124,9 +102,7 @@ Fired when the status of a FaceTime call changes (e.g., the call is answered or 
   "status": "answered",
   "isAudio": false,
   "isVideo": true,
-  "isOutgoing": false,
-  "answerUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/answer",
-  "leaveUrl": "https://api.textbubbles.com/v1/facetime/call-uuid-123/leave"
+  "isOutgoing": false
 }
 ```
 
@@ -134,13 +110,13 @@ Fired when the status of a FaceTime call changes (e.g., the call is answered or 
 
 | Field | Description |
 |-------|-------------|
-| `callUuid` | Unique identifier for the call session. Required for answering or leaving a call |
-| `to` | The phone number or email of the receiving BlueBubbles instance |
+| `callUuid` | Unique identifier for the call session |
+| `caller` / `address` | Phone number or email of the other party. `facetime.incoming` uses `caller`; `facetime.status_changed` uses `address` |
+| `to` | The phone number or email of the receiving iMessage instance |
 | `isAudio` / `isVideo` | Distinguish between FaceTime Audio and FaceTime Video calls. A FaceTime Audio call has `isAudio: true, isVideo: false`; a FaceTime Video call has `isAudio: false, isVideo: true` |
-| `answerUrl` | URL to POST to answer the call and get a shareable FaceTime Link. Requires API key authentication |
-| `leaveUrl` | URL to POST to hang up the call. Requires API key authentication |
 | `status` | Current call status. Possible values: `"incoming"`, `"answered"`, `"disconnected"`, `"missed"`, `"rejected"`, `"failed"` |
 | `isOutgoing` | Whether the call was initiated by the instance (`true`) or received (`false`). Present on `facetime.status_changed` events |
+| `timestamp` | Unix epoch milliseconds when the call was detected. Present on `facetime.incoming` events |
 
 ## Status Event Payloads
 
@@ -220,6 +196,10 @@ Delivery-status events (`message.sent`, `message.delivered`, `message.read`, `me
 
 > **Replying to inbound messages:** always use `messageId` (internal), not `externalMessageId`, when invoking TextBubbles API endpoints. For example, to react to the inbound message above, `POST /v1/messages/msg_xyz789/reactions`.
 
+### Verification / OTP codes are suppressed
+
+Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes, or other verification codes (e.g. Apple ID, Google, bank account codes) are **not** dispatched as `message.inbound` webhooks or emitted on the `/v1/events` stream. They are also hidden from `GET /v1/messages`.
+
 ### Example: WhatsApp quoted reply
 
 When a contact quote-replies to a message you sent, the webhook surfaces the parent reference so you don't need to index `externalMessageId`s yourself:
@@ -244,45 +224,6 @@ When a contact quote-replies to a message you sent, the webhook surfaces the par
   }
 }
 ```
-
-## OTP detection
-
-TextBubbles scans every inbound message body for 2FA / verification codes and surfaces matches on the `message.inbound` webhook payload. Useful for auto-populating 2FA fields in your product, forwarding codes to a secure audit channel, or rendering a 🔒 reveal-on-click chip the way iOS and Android autofill do.
-
-Match shape:
-
-```json
-{
-  "otp": {
-    "provider": "whatsapp",
-    "code": "123456",
-    "rawMatch": "Your WhatsApp code: 123-456",
-    "confidence": "high"
-  }
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `provider` | string | `"whatsapp"` for WhatsApp's canonical `Your WhatsApp code: XXX-XXX` signup SMS; `"generic"` for any 2FA-keyword-gated code |
-| `code` | string | Digits-only representation of the detected code. Hyphenated `123-456` and spaced `123 456` both normalize to `"123456"` |
-| `rawMatch` | string | The regex match as it appeared in the source text. Use this to highlight or mask the span in the message body when rendering |
-| `confidence` | string | `"high"` for provider-specific shapes (unique sender pattern). `"medium"` for generic matches — a 4–8 digit code alongside a context keyword |
-
-### Detection heuristics
-
-The detector is deliberately conservative — we'd rather miss some OTPs than false-positive on conversational numeric inbounds.
-
-- **WhatsApp signup SMS** (`provider: "whatsapp"`, high confidence) — matches WhatsApp's exact verification shape, `Your WhatsApp code: XXX-XXX`.
-- **Generic OTPs** (`provider: "generic"`, medium confidence) — matches a 4–8 digit group (flat or `XXX-XXX` / `XXX XXX`) **only when** one of these keywords appears in the body: `code`, `verification`, `verify`, `OTP`, `one-time`, `security code`, `passcode`, `pin`, `do not share`.
-
-Not flagged:
-- Bare numbers without a context keyword (`"2026"`, `"my address is 4th"`, `"I am 34"`)
-- Keywords without a digit group (`"What's the verification code?"`)
-
-### Redacting codes in your logs
-
-If you log webhook payloads, consider either redacting the matched span yourself (`text.replace(rawMatch, "••••••")`) or routing OTP-carrying inbounds to a stricter log channel. TextBubbles stores `otp` on the message record; `text` is preserved verbatim. A server-side `redactOtps` toggle on webhook config is on the roadmap — file a request if you'd like it sooner.
 
 ## Typing Indicator
 
@@ -338,7 +279,7 @@ WhatsApp contacts emit a typing event while composing a message. The webhook sur
 | `disconnectReason` | string \| null | Present when `status` is `disconnected` — `auth_revoked`, `phone_number_mismatch`, or `close_<code>` |
 | `customerId` | string | Customer the session belongs to |
 
-Subscribe from the textbubbles UI via Supabase Realtime, or from any SSE-capable client via `GET /v1/events?events=whatsapp.status`.
+Subscribe from the textbubbles UI or from any SSE-capable client via `GET /v1/events?events=whatsapp.status`.
 
 ## Reaction Events
 
@@ -387,9 +328,107 @@ Emoji and sticker reactions (iOS 17+ / macOS 14+) include an `emoji` field:
 |-------|-------------|
 | `reaction.type` | Reaction type. **iMessage:** `love`, `like`, `dislike`, `laugh`, `emphasize`, `question`, `emoji`, `remove`. **WhatsApp:** the raw emoji character (e.g. `❤️`, `🔥`), or the literal string `"removed"` when the reaction was cleared |
 | `reaction.emoji` | The emoji character. Present on iMessage when `type` is `emoji` (iOS 17+), and on WhatsApp whenever a non-empty emoji was sent |
-| `reaction.targetMessageId` | Internal `messageId` the reaction was applied to |
-| `reaction.targetExternalId` | Provider-level id of the original message (BlueBubbles GUID for iMessage, WA message id for WhatsApp) |
+| `reaction.targetMessageId` | Internal `messageId` the reaction was applied to (null if not found) |
+| `reaction.targetExternalId` | Provider-assigned GUID of the original message |
 | `reaction.content` | Human-readable description or preview of the target message text (null for emoji-only reactions on iMessage) |
+
+## Audio Kept Events
+
+Fired when a contact taps **Keep** on a voice note you sent. iMessage auto-deletes voice notes after two minutes unless the recipient keeps them — tapping Keep is an explicit retention signal, useful as a lightweight engagement event.
+
+```json
+{
+  "id": "evt_audio_kept_123",
+  "type": "message.audio_kept",
+  "timestamp": "2026-04-21T09:17:46.007Z",
+  "data": {
+    "externalMessageId": "D6ADF04F-EF82-45F6-BF46-CF7F2B20C9AE",
+    "targetMessageId": "msg_cdf628ad-3ed3-49aa-a10f-a0ea19c9220c",
+    "targetExternalId": "4DE4DB87-1681-4DC7-A77B-3967BCA74BF7",
+    "from": "+14155551234",
+    "to": "+13105550199",
+    "channel": "imessage"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `externalMessageId` | Provider-assigned GUID of the Keep system event itself |
+| `targetMessageId` | Internal message ID of the audio message that was kept. `null` if the audio predates our retention or was sent through a different iMessage instance — `targetExternalId` is still populated so you can cross-reference if you store provider GUIDs |
+| `targetExternalId` | Provider-assigned GUID of the audio message that was kept |
+| `from` | Contact who tapped Keep |
+| `to` | Instance phone number the audio was sent from |
+
+## Chat Event Payloads
+
+All four chat events share the same envelope. Each carries `externalMessageId` (the provider-assigned GUID of the underlying system event), `chatId` (provider chat identifier — for 1:1 chats this is the contact address; for group chats it's an opaque identifier you can match against the `chat` resource), and `actor` (who performed the action).
+
+### `chat.participant.added` / `chat.participant.left`
+
+```json
+{
+  "id": "evt_participant_added",
+  "type": "chat.participant.added",
+  "timestamp": "2026-04-21T10:00:00.000Z",
+  "data": {
+    "externalMessageId": "<system-event-guid>",
+    "chatId": "iMessage;+;chat1234567890",
+    "participant": "+14155551235",
+    "actor": "+14155551234",
+    "to": "+13105550199",
+    "channel": "imessage"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `chatId` | Provider chat identifier |
+| `participant` | Contact added to (or removed from) the chat |
+| `actor` | Contact who performed the action |
+
+### `chat.title.changed`
+
+```json
+{
+  "id": "evt_title_changed",
+  "type": "chat.title.changed",
+  "timestamp": "2026-04-21T10:05:00.000Z",
+  "data": {
+    "externalMessageId": "<system-event-guid>",
+    "chatId": "iMessage;+;chat1234567890",
+    "title": "Weekend plans",
+    "actor": "+14155551234",
+    "to": "+13105550199",
+    "channel": "imessage"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `title` | The new chat title |
+| `actor` | Contact who changed the title |
+
+### `chat.photo.changed`
+
+```json
+{
+  "id": "evt_photo_changed",
+  "type": "chat.photo.changed",
+  "timestamp": "2026-04-21T10:10:00.000Z",
+  "data": {
+    "externalMessageId": "<system-event-guid>",
+    "chatId": "iMessage;+;chat1234567890",
+    "actor": "+14155551234",
+    "to": "+13105550199",
+    "channel": "imessage"
+  }
+}
+```
+
+The event does not include the new photo — retrieve it through the chat resource.
 
 ## Subscribing to Events
 
