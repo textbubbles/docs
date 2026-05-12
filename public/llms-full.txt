@@ -1197,13 +1197,14 @@ Fired when an incoming FaceTime call is detected on an instance.
 | from | string | Sender's phone number (E.164) or email |
 | to | string | Receiving phone number or email (identifies which instance received the message) |
 | text | string | Message text content |
-| channel | string | Channel the message was received on (imessage or sms) |
+| channel | string | Channel the message was received on (imessage, sms, or whatsapp) |
 | attachments | array | List of file attachments (empty array if none) |
 | attachments[].guid | string | Unique identifier for the attachment |
 | attachments[].mimeType | string | MIME type (e.g., image/jpeg, video/mp4, audio/aac) |
 | attachments[].filename | string | Original filename |
 | attachments[].totalBytes | number | File size in bytes |
-| attachments[].downloadUrl | string | Pre-signed URL (1 hour TTL, no API key required) |
+| attachments[].downloadUrl | string | Pre-signed URL (1 hour TTL, no API key required). Same shape across all channels — your inbox code does not need to branch on `channel` to fetch media. |
+| attachments[].note | string \| undefined | Present only on rare failure cases when the attachment metadata was received but the bytes couldn't be persisted. When present, `downloadUrl` will be absent. |
 
 ## Reaction Events
 
