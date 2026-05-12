@@ -209,13 +209,13 @@ Delivery-status events (`message.sent`, `message.delivered`, `message.read`, `me
 | `channel` | string | Channel the message was received on: `imessage`, `sms`, or `whatsapp` |
 | `parentMessageId` | string \| null | Internal `messageId` this inbound is replying to. Set for iMessage thread replies **and** WhatsApp quoted replies — a consumer that reads only `parentMessageId` works on both channels |
 | `replyTo` | object \| absent | **WhatsApp only.** Provider-level detail about the quoted parent — same internal `messageId` as `parentMessageId`, plus the WhatsApp `externalMessageId` for correlating with WA-indexed stores. Omit if the inbound was not a quoted reply |
-| `attachments` | array | List of file attachments on the message (empty array if none). **iMessage** entries include a pre-signed `downloadUrl`; **WhatsApp** entries instead inline the bytes as `dataBase64` when small enough |
-| `attachments[].guid` | string | Unique identifier for the attachment (iMessage) |
+| `attachments` | array | List of file attachments on the message (empty array if none). Same shape across all channels — your inbox code does not need to branch on `channel` to fetch media |
+| `attachments[].guid` | string \| undefined | Unique identifier for the attachment. Present for iMessage attachments; omitted on other channels |
 | `attachments[].mimeType` | string | MIME type of the file (e.g., `image/jpeg`, `video/mp4`, `audio/aac`) |
-| `attachments[].filename` | string | Original filename |
+| `attachments[].filename` | string \| undefined | Original filename when the sender supplied one |
 | `attachments[].totalBytes` | number | File size in bytes |
-| `attachments[].downloadUrl` | string | **iMessage.** Pre-signed URL to download the attachment. Time-limited (1 hour) and self-authenticated — no API key required. Fetch directly via GET request |
-| `attachments[].dataBase64` | string | **WhatsApp.** Base64-encoded file bytes for smaller attachments. Very large media may arrive as a metadata-only entry without `dataBase64` — the presence of `dataBase64` signals the file is fully delivered |
+| `attachments[].downloadUrl` | string | Pre-signed URL to download the attachment. Time-limited (1 hour) and self-authenticated — no API key required. Fetch directly via GET request |
+| `attachments[].note` | string \| undefined | Present only on rare failure cases when the attachment metadata reached the platform but the bytes couldn't be persisted. When present, `downloadUrl` will be absent |
 | `otp` | object \| absent | Present when TextBubbles detected a 2FA / verification code in the inbound body (WhatsApp signup, bank OTP, etc.). See [OTP detection](#otp-detection) below |
 
 > **Replying to inbound messages:** always use `messageId` (internal), not `externalMessageId`, when invoking TextBubbles API endpoints. For example, to react to the inbound message above, `POST /v1/messages/msg_xyz789/reactions`.

@@ -179,7 +179,7 @@ curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/j
 
 Inbound WhatsApp messages, reactions, typing indicators, and delivery/read updates flow through your registered webhook the same way iMessage events do. Each event includes `"channel": "whatsapp"` and a `customerId`.
 
-Inbound media currently arrives base64-encoded inline in the webhook payload at `metadata.attachments[].dataBase64` for smaller files; very large media may arrive as a metadata-only entry. Treat the presence of `dataBase64` as the signal that the file is fully delivered.
+Inbound media (photos, videos, voice notes, documents, stickers) is surfaced as `attachments[]` with a pre-signed `downloadUrl` — the same shape iMessage attachments use. Fetch the URL directly (no API key required, 1-hour TTL). See [Inbound Message Fields](/webhooks/events#inbound-message-fields) for the full attachment shape.
 
 ## Limitations
 

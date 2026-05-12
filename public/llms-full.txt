@@ -1073,13 +1073,14 @@ curl -X POST https://api.textbubbles.com/v1/facetime/call-uuid-123/leave \
 | from | string | Sender's phone number (E.164) or email |
 | to | string | Receiving phone number or email (identifies which instance received the message) |
 | text | string | Message text content |
-| channel | string | Channel the message was received on (imessage or sms) |
-| attachments | array | List of file attachments (empty array if none) |
-| attachments[].guid | string | Unique identifier for the attachment |
+| channel | string | Channel the message was received on (imessage, sms, or whatsapp) |
+| attachments | array | List of file attachments (empty array if none). Same shape across all channels — your inbox code does not need to branch on `channel` to fetch media |
+| attachments[].guid | string \| undefined | Unique identifier for the attachment. Present for iMessage; omitted on other channels |
 | attachments[].mimeType | string | MIME type (e.g., image/jpeg, video/mp4, audio/aac) |
-| attachments[].filename | string | Original filename |
+| attachments[].filename | string \| undefined | Original filename when the sender supplied one |
 | attachments[].totalBytes | number | File size in bytes |
 | attachments[].downloadUrl | string | Pre-signed URL (1 hour TTL, no API key required) |
+| attachments[].note | string \| undefined | Present only on rare failure cases when the attachment metadata reached the platform but the bytes couldn't be persisted. When present, `downloadUrl` will be absent |
 
 ## Reaction Events
 
@@ -1435,7 +1436,7 @@ The number on the scanned WhatsApp account MUST match the registered TextBubbles
 
 ## Inbound media
 
-Inbound media arrives base64-encoded inline at `metadata.attachments[].dataBase64` for smaller files; very large media may arrive as a metadata-only entry. Treat the presence of `dataBase64` as the signal that the file is fully delivered.
+Inbound media (photos, videos, voice notes, documents, stickers) is surfaced as `attachments[]` with a pre-signed `downloadUrl` — the same shape iMessage attachments use. Fetch the URL directly (no API key required, 1-hour TTL). See the [Inbound Message Fields](#inbound-message-fields) table above for the full attachment shape.
 
 ## Errors
 
