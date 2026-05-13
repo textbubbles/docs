@@ -218,6 +218,8 @@ By default, messages try iMessage first and fall back to SMS. Customize with the
 - `preference` — ordered list of channels: `"imessage"`, `"sms"`, `"whatsapp"`
 - `fallback` — try the next channel if the first fails (default: `true`)
 
+> **Webhook event reliability varies by channel.** SMS in particular does not emit `message.read`, only emits `message.delivered` on a best-effort basis (depends on the carrier returning a receipt), and SMS "reactions" arrive as plain `message.inbound` text rather than `message.reaction`. See [Per-Channel Reliability](/webhooks/events#per-channel-reliability) for the full matrix before relying on a specific event for a given channel.
+
 ### WhatsApp
 
 Include `"whatsapp"` in the preference list. The WhatsApp send uses the **same phone number** as your iMessage/SMS line — pairing is per-instance and managed via the admin panel.

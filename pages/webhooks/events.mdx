@@ -145,6 +145,27 @@ Delivery-status events (`message.sent`, `message.delivered`, `message.read`, `me
 
 > `message.read` fires for iMessage and WhatsApp when the recipient has read receipts enabled on their device. It is a **distinct** event from `message.delivered` — do not collapse them when tracking delivery state. SMS does not emit `message.read`.
 
+### Per-Channel Reliability
+
+Not every event fires for every channel. The matrix below documents which events your endpoint can rely on per channel — code that branches on channel should use this rather than assume parity.
+
+| Event | iMessage | SMS | WhatsApp |
+|---|---|---|---|
+| `message.sent` | reliable | reliable | reliable |
+| `message.delivered` | reliable | best-effort¹ | reliable |
+| `message.read` | when enabled² | not emitted | when enabled² |
+| `message.failed` | reliable | reliable | reliable |
+| `message.fallback` | reliable (on iMessage → SMS fallback) | n/a | n/a |
+| `message.inbound` | reliable | reliable | reliable |
+| `message.reaction` (outbound from contact) | reliable (native tapbacks + iOS 17+ emoji) | not native³ | reliable |
+| `typing.indicator` | not emitted | not emitted | reliable |
+
+¹ **SMS `message.delivered`:** SMS sent through the iMessage provider's continuity bridge relies on the carrier returning a delivery receipt. Some carriers, some recipients, and some message types do not produce a receipt, in which case `message.delivered` will never arrive even though the message was delivered. Treat `message.sent` as the only reliable success signal for SMS, and use `message.failed` for explicit failures.
+
+² **`message.read` requires the recipient to have read receipts enabled** on their device for that conversation. iMessage users can disable read receipts globally or per-conversation; WhatsApp users can disable them globally. If the recipient has them off, the message is read but no event fires.
+
+³ **SMS has no native reaction protocol.** When an SMS user reacts to your message on iOS, their phone sends the reaction as a plain text message like `Loved "your original text"`. TextBubbles surfaces these as ordinary `message.inbound` events with the literal text — not as `message.reaction` events. Conversely, sending a reaction targeting an SMS message via `POST /v1/messages/:id/reactions` returns `CHANNEL_NOT_SUPPORTED`.
+
 ## Inbound Message Payload
 
 ```json

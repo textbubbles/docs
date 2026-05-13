@@ -1094,6 +1094,26 @@ Every webhook event follows this structure:
 | message.deleted | Message was soft-deleted |
 | typing.indicator | Recipient is typing (WhatsApp only) |
 
+### Per-Channel Reliability
+
+Not every event fires for every channel. Use this matrix when branching on channel — do not assume parity.
+
+| Event | iMessage | SMS | WhatsApp |
+|---|---|---|---|
+| message.sent | reliable | reliable | reliable |
+| message.delivered | reliable | best-effort (carrier-dependent) | reliable |
+| message.read | when recipient has read receipts enabled | not emitted | when recipient has read receipts enabled |
+| message.failed | reliable | reliable | reliable |
+| message.fallback | reliable (iMessage → SMS) | n/a | n/a |
+| message.inbound | reliable | reliable | reliable |
+| message.reaction (from contact) | reliable | not native — arrives as inbound text "Loved 'X'" | reliable |
+| typing.indicator | not emitted | not emitted | reliable |
+
+Notes:
+- SMS message.delivered depends on the carrier returning a delivery receipt; some carriers and message types never produce one. Treat message.sent as the only reliable success signal for SMS; rely on message.failed for explicit failures.
+- message.read requires the recipient to have read receipts enabled. iMessage allows per-conversation toggling; WhatsApp is global.
+- SMS has no native reaction protocol. When an SMS user reacts on iOS, their phone sends the reaction as a plain text message; TextBubbles surfaces it as a normal message.inbound. Sending a reaction targeting an SMS message via POST /v1/messages/:id/reactions returns CHANNEL_NOT_SUPPORTED.
+
 ## Chat Events
 
 Fired when a contact performs a chat-state action (iMessage group chats).
