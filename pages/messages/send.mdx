@@ -215,7 +215,7 @@ By default, messages try iMessage first and fall back to SMS. Customize with the
 }
 ```
 
-- `preference` — ordered list of channels: `"imessage"`, `"sms"`, `"whatsapp"`
+- `preference` — ordered list of channels: `"imessage"`, `"sms"`, `"whatsapp"`. When you supply this field explicitly, channels are attempted **strictly in the order given**: for each channel that requires a reachability probe (iMessage, WhatsApp), the recipient is checked live, and only if the probe says the recipient is unreachable on that channel does the next channel get tried. Omitting `preference` uses the default `["imessage", "sms"]` along with a short-lived availability cache — slightly faster, but a recently-cached "not on iMessage" answer can carry across briefly. Specify `preference` explicitly when you need the strict-order guarantee.
 - `fallback` — try the next channel if the first fails (default: `true`)
 
 > **Webhook event reliability varies by channel.** SMS in particular does not emit `message.read`, only emits `message.delivered` on a best-effort basis (depends on the carrier returning a receipt), and SMS "reactions" arrive as plain `message.inbound` text rather than `message.reaction`. See [Per-Channel Reliability](/webhooks/events#per-channel-reliability) for the full matrix before relying on a specific event for a given channel.
