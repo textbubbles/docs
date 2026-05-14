@@ -423,7 +423,7 @@ By default, messages try iMessage first and fall back to SMS. Customize with the
 }
 ```
 
-- `preference` — ordered list of channels: "imessage", "sms"
+- `preference` — ordered list of channels: "imessage", "sms", "whatsapp". When supplied explicitly, channels are attempted strictly in order: for each channel that requires a reachability probe (iMessage, WhatsApp), the recipient is checked live, and only if the probe says the recipient is unreachable on that channel does the next one get tried. Omitting `preference` uses the default ["imessage", "sms"] along with a short-lived availability cache (faster, but a recently-cached "not on iMessage" answer can carry across briefly). Specify `preference` explicitly when you need the strict-order guarantee.
 - `fallback` — try the next channel if the first fails (default: true)
 
 ## Unsend a Message
