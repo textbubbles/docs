@@ -256,7 +256,8 @@ An instance can have multiple warnings at the same time. Warnings are cleared au
 | `SCHEDULED_IN_PAST` | 400 | Scheduled time is in the past |
 | `SCHEDULED_TOO_FAR` | 400 | Scheduled time is more than 30 days away |
 | `DEPRECATED` | 410 | Endpoint has been deprecated |
-| `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
+| `RATE_LIMIT_EXCEEDED` | 429 | Too many requests on this API key. Inspect `X-RateLimit-Limit` / `X-RateLimit-Remaining` / `Retry-After` on the response. Per-key budget covers all endpoints (sends + status polls + listings). |
+| `RATE_LIMIT_PHONE_EXCEEDED` | 429 | Too many sends from a single `from` phone number. Independent of `RATE_LIMIT_EXCEEDED`. Inspect `X-RateLimit-Limit-Phone` / `X-RateLimit-Remaining-Phone` / `Retry-After`. Distinct so you can tell "my key's overall traffic is over budget" from "this specific line is being driven too hard". |
 | `PROVIDER_TIMEOUT` | 504 | Upstream iMessage service timed out |
 | `EDIT_FAILED` | 502 | Message edit could not be completed |
 | `IMESSAGE_SEND_FAILED` | 500 | iMessage delivery error |

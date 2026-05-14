@@ -4,7 +4,7 @@
 
 Base URL: https://api.textbubbles.com
 Authentication: Bearer token in Authorization header
-Rate Limit: 100 requests/minute per API key
+Rate Limit: two independent budgets — (a) 600 requests/minute per API key across all endpoints (sends + polls + listings), customizable per key on request; (b) 100 sends/minute per `from` phone number, independent of the per-key budget.
 
 ---
 
@@ -200,14 +200,30 @@ API keys use the prefix `tb_` followed by a unique identifier.
 
 ## Rate Limiting
 
-Each API key has its own rate limits. When exceeded, you'll receive a 429 Too Many Requests response with a `Retry-After` header:
+Two independent rate-limit budgets apply:
+
+1. **Per-API-key (all endpoints)** — 600 requests/minute by default, shared across every endpoint that requires authentication (sends, polls, listings, capability lookups). Default is configurable per-key on request; contact support to raise yours if your workload needs it. Trips `RATE_LIMIT_EXCEEDED` (HTTP 429).
+2. **Per-`from` phone number (send endpoints only)** — 100 sends/minute per outbound phone number, independent of the per-key budget. Protects each line from being driven faster than carrier comfort. Trips `RATE_LIMIT_PHONE_EXCEEDED` (HTTP 429).
+
+Both limits use a sliding 60-second window. Rejected requests do NOT consume budget — once the window has room, the next request goes through immediately.
 
 ```json
 {
   "success": false,
   "error": {
     "code": "RATE_LIMIT_EXCEEDED",
-    "message": "Too many requests. Please retry after 60 seconds."
+    "message": "Rate limit exceeded. Maximum 600 requests per 60 seconds."
+  },
+  "requestId": "req_xyz"
+}
+```
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "RATE_LIMIT_PHONE_EXCEEDED",
+    "message": "Send rate limit exceeded for +14155551234. Maximum 100 sends per 60 seconds per phone number."
   },
   "requestId": "req_xyz"
 }
@@ -219,9 +235,11 @@ Every API response includes rate limit information:
 
 | Header | Description |
 |--------|-------------|
-| X-RateLimit-Limit | Maximum requests per window (100) |
-| X-RateLimit-Remaining | Requests remaining in current window |
-| X-RateLimit-Reset | Unix timestamp when the window resets |
+| X-RateLimit-Limit | Maximum requests per window for this key (default 600) |
+| X-RateLimit-Remaining | Requests remaining in the current per-key window |
+| X-RateLimit-Reset | Unix timestamp when the per-key window resets |
+| X-RateLimit-Limit-Phone | Maximum sends per window per `from` phone (100) — only on send endpoints |
+| X-RateLimit-Remaining-Phone | Sends remaining for this `from` number in the current window — only on send endpoints |
 | Retry-After | Seconds to wait (only on 429 responses) |
 
 Implement exponential backoff when handling rate limits:
@@ -1558,7 +1576,8 @@ Top-level status is "ok" when database and Redis are reachable, "degraded" if ei
 | SCHEDULED_IN_PAST | 400 | Scheduled time is in the past |
 | SCHEDULED_TOO_FAR | 400 | Scheduled time is more than 30 days away |
 | DEPRECATED | 410 | Endpoint has been deprecated |
-| RATE_LIMIT_EXCEEDED | 429 | Too many requests |
+| RATE_LIMIT_EXCEEDED | 429 | Too many requests on this API key (across all endpoints). Inspect X-RateLimit-Limit / X-RateLimit-Remaining / Retry-After. |
+| RATE_LIMIT_PHONE_EXCEEDED | 429 | Too many sends from a single `from` phone number. Independent of RATE_LIMIT_EXCEEDED. Inspect X-RateLimit-Limit-Phone / X-RateLimit-Remaining-Phone / Retry-After. |
 | PROVIDER_TIMEOUT | 504 | Upstream iMessage service timed out |
 | EDIT_FAILED | 502 | Message edit could not be completed |
 | IMESSAGE_SEND_FAILED | 500 | iMessage delivery error |
