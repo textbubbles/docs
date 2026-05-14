@@ -1114,6 +1114,23 @@ Notes:
 - message.read requires the recipient to have read receipts enabled. iMessage allows per-conversation toggling; WhatsApp is global.
 - SMS has no native reaction protocol. When an SMS user reacts on iOS, their phone sends the reaction as a plain text message; TextBubbles surfaces it as a normal message.inbound. Sending a reaction targeting an SMS message via POST /v1/messages/:id/reactions returns CHANNEL_NOT_SUPPORTED.
 
+### message.failed payload
+
+```json
+{
+  "id": "evt_def456",
+  "type": "message.failed",
+  "timestamp": "2026-03-28T10:00:09.000Z",
+  "data": {
+    "messageId": "msg_xyz789",
+    "channel": "whatsapp",
+    "error": "NO_CHANNEL_AVAILABLE"
+  }
+}
+```
+
+The `error` field on message.failed is always a plain string — either a short error code (e.g. NO_CHANNEL_AVAILABLE) or a human-readable message from the upstream provider. It is NOT an object; do not read error.message. externalMessageId is omitted when the failure occurs before the message reached the upstream provider (e.g. routing failures).
+
 ## Chat Events
 
 Fired when a contact performs a chat-state action (iMessage group chats).
@@ -1226,6 +1243,12 @@ Fired when an incoming FaceTime call is detected on an instance.
 | attachments[].totalBytes | number | File size in bytes |
 | attachments[].downloadUrl | string | Pre-signed URL (1 hour TTL, no API key required) |
 | attachments[].note | string \| undefined | Present only on rare failure cases when the attachment metadata reached the platform but the bytes couldn't be persisted. When present, `downloadUrl` will be absent |
+
+### WhatsApp group inbound
+
+WhatsApp messages received from a group chat are currently emitted as message.inbound events. The `from` field is set to the group's identifier expressed as an E.164-shaped string (the platform synthesizes one from the group's stable internal ID), not the individual sender's number — so a single value identifies the group, but it is NOT a real mobile number and will not match a contact's E.164.
+
+The webhook payload does not currently include a dedicated isGroup flag or chat object. If you do not want to surface group threads in your inbox, the recommended workaround is to maintain an allowlist of expected fan E.164 numbers and drop inbounds whose `from` is not on the list; group-emitted values will fall outside that set. A first-class group-inbound shape is on the roadmap. (Sending INTO an existing WhatsApp group is fully supported and uses the JID form `to: "...@g.us"`; this note is about the INBOUND webhook shape only.)
 
 ## Reaction Events
 
