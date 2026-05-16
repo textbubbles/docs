@@ -1026,7 +1026,7 @@ def verify_webhook(payload_body, signature, timestamp, secret):
 
 ## Retry Policy
 
-Your endpoint must respond with a 2xx status code within 30 seconds. Other responses are classified as either retryable or terminal:
+Your endpoint must respond with a 2xx status code within 10 seconds. Other responses are classified as either retryable or terminal:
 
 | Response | Treated as | Behavior |
 |---|---|---|
@@ -1035,7 +1035,7 @@ Your endpoint must respond with a 2xx status code within 30 seconds. Other respo
 | Any other 4xx (400, 401, 403, 404, 410, 422, …) | Terminal | Recorded once as `failed`. Not retried. Does not count toward auto-deactivation. |
 | 5xx, network errors (timeout, DNS, TCP reset) | Retryable | Same as 408/429. |
 
-A 4xx from your endpoint means "I won't process this, don't retry," so we don't. Use 200 with an "ignored" body when you want to acknowledge an event you intentionally skip — this matches Stripe, GitHub, Twilio, Shopify, Slack.
+To acknowledge an event you intentionally skip (e.g. unknown resource, ignored event type), return 200 with a body like `{"success": true, "message": "ignored"}`. Returning 4xx will drop the event from this webhook's queue.
 
 Retryable retry schedule (exponential backoff):
 
@@ -1049,7 +1049,7 @@ Retryable retry schedule (exponential backoff):
 | 6 | 24 hours |
 | 7 | 24 hours (final) |
 
-Auto-deactivation: when three consecutive deliveries to the same webhook all exhaust their retry chain, the webhook is automatically deactivated (`active=false`). Any single 2xx delivery resets the counter. Terminal 4xx responses do not contribute to the counter — they are recorded as failed and dropped, but the webhook stays active so unrelated events continue to deliver.
+Auto-deactivation: when three consecutive deliveries to the same webhook each exhaust the full retry chain, the webhook is automatically deactivated (`active=false`). Any 2xx delivery resets the counter. Terminal 4xx responses do not contribute to the counter.
 
 ## Best Practices
 

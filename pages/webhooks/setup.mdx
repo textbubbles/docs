@@ -378,7 +378,7 @@ def verify_webhook(raw_body: str, signature: str, timestamp: str, secret: str) -
 
 ## Retry Policy
 
-Your endpoint must respond with a `2xx` status code within 30 seconds. Anything else is classified as either **retryable** or **terminal**:
+Your endpoint must respond with a `2xx` status code within 10 seconds. Anything else is classified as either **retryable** or **terminal**:
 
 | Response | Treated as | Behavior |
 |---|---|---|
@@ -387,7 +387,7 @@ Your endpoint must respond with a `2xx` status code within 30 seconds. Anything 
 | Any other `4xx` (`400`, `401`, `403`, `404`, `410`, `422`, …) | **Terminal** | Recorded once as `failed`. **Not retried.** Does not count toward auto-deactivation. The event is dropped from this webhook's queue. |
 | `5xx`, network errors (timeout, DNS, TCP reset) | Retryable | Same as 408/429. |
 
-This matches the convention every major webhook provider uses (Stripe, GitHub, Twilio, Shopify, Slack): a `4xx` from your endpoint means "I won't process this, don't retry," so we don't. Use `200` with an "ignored" body when you want to acknowledge an event you've intentionally chosen to skip.
+To acknowledge an event you intentionally skip (e.g. unknown resource, ignored event type), return `200` with a body like `{"success": true, "message": "ignored"}`. Returning `4xx` will drop the event from this webhook's queue.
 
 **Retryable retry schedule (exponential backoff):**
 
@@ -401,7 +401,7 @@ This matches the convention every major webhook provider uses (Stripe, GitHub, T
 | 6 | 24 hours |
 | 7 | 24 hours (final) |
 
-**Auto-deactivation:** When three consecutive deliveries to the same webhook all exhaust their retry chain, the webhook is automatically deactivated (`active=false`). Any single `2xx` delivery resets the counter. Terminal 4xx responses do **not** contribute to the counter — they're recorded as failed and dropped, but the webhook stays active so unrelated events continue to deliver.
+**Auto-deactivation:** When three consecutive deliveries to the same webhook each exhaust the full retry chain, the webhook is automatically deactivated (`active=false`). Any `2xx` delivery resets the counter. Terminal 4xx responses do not contribute to the counter.
 
 ## Best Practices
 
