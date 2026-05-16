@@ -378,7 +378,18 @@ def verify_webhook(raw_body: str, signature: str, timestamp: str, secret: str) -
 
 ## Retry Policy
 
-Failed webhook deliveries are retried with exponential backoff:
+Your endpoint must respond with a `2xx` status code within 30 seconds. Anything else is classified as either **retryable** or **terminal**:
+
+| Response | Treated as | Behavior |
+|---|---|---|
+| `2xx` | Success | Delivery recorded as `delivered`. Resets the consecutive-failure streak. |
+| `408` Request Timeout, `429` Too Many Requests | Retryable | Retried with exponential backoff (see table below). Counts toward auto-deactivation if all retries fail. |
+| Any other `4xx` (`400`, `401`, `403`, `404`, `410`, `422`, …) | **Terminal** | Recorded once as `failed`. **Not retried.** Does not count toward auto-deactivation. The event is dropped from this webhook's queue. |
+| `5xx`, network errors (timeout, DNS, TCP reset) | Retryable | Same as 408/429. |
+
+This matches the convention every major webhook provider uses (Stripe, GitHub, Twilio, Shopify, Slack): a `4xx` from your endpoint means "I won't process this, don't retry," so we don't. Use `200` with an "ignored" body when you want to acknowledge an event you've intentionally chosen to skip.
+
+**Retryable retry schedule (exponential backoff):**
 
 | Attempt | Delay |
 |---------|-------|
@@ -390,7 +401,7 @@ Failed webhook deliveries are retried with exponential backoff:
 | 6 | 24 hours |
 | 7 | 24 hours (final) |
 
-Your endpoint must respond with a `2xx` status code within 30 seconds.
+**Auto-deactivation:** When three consecutive deliveries to the same webhook all exhaust their retry chain, the webhook is automatically deactivated (`active=false`). Any single `2xx` delivery resets the counter. Terminal 4xx responses do **not** contribute to the counter — they're recorded as failed and dropped, but the webhook stays active so unrelated events continue to deliver.
 
 ## Best Practices
 

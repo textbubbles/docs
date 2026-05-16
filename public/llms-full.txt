@@ -1026,7 +1026,18 @@ def verify_webhook(payload_body, signature, timestamp, secret):
 
 ## Retry Policy
 
-Failed webhook deliveries are retried with exponential backoff:
+Your endpoint must respond with a 2xx status code within 30 seconds. Other responses are classified as either retryable or terminal:
+
+| Response | Treated as | Behavior |
+|---|---|---|
+| 2xx | Success | Delivery recorded as `delivered`. Resets the consecutive-failure streak. |
+| 408 Request Timeout, 429 Too Many Requests | Retryable | Retried with exponential backoff (see table). Counts toward auto-deactivation if retries exhaust. |
+| Any other 4xx (400, 401, 403, 404, 410, 422, …) | Terminal | Recorded once as `failed`. Not retried. Does not count toward auto-deactivation. |
+| 5xx, network errors (timeout, DNS, TCP reset) | Retryable | Same as 408/429. |
+
+A 4xx from your endpoint means "I won't process this, don't retry," so we don't. Use 200 with an "ignored" body when you want to acknowledge an event you intentionally skip — this matches Stripe, GitHub, Twilio, Shopify, Slack.
+
+Retryable retry schedule (exponential backoff):
 
 | Attempt | Delay |
 |---------|-------|
@@ -1038,7 +1049,7 @@ Failed webhook deliveries are retried with exponential backoff:
 | 6 | 24 hours |
 | 7 | 24 hours (final) |
 
-Your endpoint must respond with a 2xx status code within 30 seconds.
+Auto-deactivation: when three consecutive deliveries to the same webhook all exhaust their retry chain, the webhook is automatically deactivated (`active=false`). Any single 2xx delivery resets the counter. Terminal 4xx responses do not contribute to the counter — they are recorded as failed and dropped, but the webhook stays active so unrelated events continue to deliver.
 
 ## Best Practices
 
