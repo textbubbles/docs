@@ -73,16 +73,14 @@ TextBubbles exposes two ways to send non-text content on a message, and they map
 
 | Use | Field | Channels | Source types | Notes |
 |-----|-------|----------|--------------|-------|
-| Send a file (photo, video, PDF, audio, any MIME type) | `attachments[]` | iMessage and SMS/MMS | `type: "url"` (HTTPS) or `type: "base64"` | Required for non-image files. On SMS, each attachment is delivered as a separate MMS; carrier delivery of non-image MIME types is not guaranteed. |
-| Send an image over **SMS/MMS** | `content.mediaUrls` | SMS/MMS (and iMessage as image carousel when 2+ URLs) | HTTPS image URLs only | The carrier fetches the URL and attaches the image as MMS. |
-| Send an **image carousel** over iMessage | `content.mediaUrls` (2–20 URLs) | iMessage | HTTPS image URLs | Automatically detected as carousel when 2+ URLs are provided. |
+| Send a file (photo, video, PDF, audio, any MIME type) | `attachments[]` | iMessage and SMS/MMS | `type: "url"` (HTTPS) or `type: "base64"` | Required for non-image files and for base64 payloads. On iMessage, 2+ items arrive as a grouped photo gallery delivered after the text bubble. On SMS, each attachment is delivered as a separate MMS; carrier delivery of non-image MIME types is not guaranteed. |
+| Send an image (or 2+ images as a carousel) | `content.mediaUrls` | iMessage and SMS/MMS | HTTPS image URLs only | On iMessage, 2+ URLs arrive as a single grouped carousel bubble with the text caption inlined. On SMS, the carrier fetches each URL and attaches it as MMS. |
 
 ### Decision tree
 
-1. **Do you need to send a non-image file** (PDF, video, audio, vCard, etc.)? Use `attachments[]` with `type: "url"` or `type: "base64"`. SMS/MMS cannot carry arbitrary file types in all carrier networks — [check capabilities](/api-reference#get-v1capabilitiesphonenumber) first.
-2. **Do you want to send 2+ images as a carousel** (single grouped iMessage bubble)? Use `content.mediaUrls`. Do not use `attachments[]` for this — only `mediaUrls` triggers carousel messageType.
-3. **Do you have raw bytes** (not a public URL)? Use `attachments[]` with `type: "base64"`.
-4. **Everything else (single image with an HTTPS URL):** either works; prefer `attachments[]` for explicit control over `mimeType` and `filename`.
+1. **Do you need a non-image file** (PDF, video, audio, vCard, etc.) or to send raw bytes (`type: "base64"`)? Use `attachments[]`. SMS/MMS cannot carry arbitrary file types in all carrier networks — [check capabilities](/api-reference#get-v1capabilitiesphonenumber) first.
+2. **Do you want 2+ images to arrive as a single grouped bubble with the text caption inline?** Use `content.mediaUrls`. Multiple `attachments[]` also arrives as a grouped gallery on iMessage, but the text is sent as a separate bubble *before* the gallery.
+3. **Everything else (single image with an HTTPS URL):** either works; prefer `attachments[]` for explicit control over `mimeType` and `filename`.
 
 ### Do not combine
 
