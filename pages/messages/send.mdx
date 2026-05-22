@@ -73,21 +73,20 @@ TextBubbles exposes two ways to send non-text content on a message, and they map
 
 | Use | Field | Channels | Source types | Notes |
 |-----|-------|----------|--------------|-------|
-| Send a file (photo, video, PDF, audio, any MIME type) over **iMessage** | `attachments[]` | iMessage only | `type: "url"` (HTTPS) or `type: "base64"` | Full iMessage attachment semantics. Required for non-image files. |
+| Send a file (photo, video, PDF, audio, any MIME type) | `attachments[]` | iMessage and SMS/MMS | `type: "url"` (HTTPS) or `type: "base64"` | Required for non-image files. On SMS, each attachment is delivered as a separate MMS; carrier delivery of non-image MIME types is not guaranteed. |
 | Send an image over **SMS/MMS** | `content.mediaUrls` | SMS/MMS (and iMessage as image carousel when 2+ URLs) | HTTPS image URLs only | The carrier fetches the URL and attaches the image as MMS. |
 | Send an **image carousel** over iMessage | `content.mediaUrls` (2–20 URLs) | iMessage | HTTPS image URLs | Automatically detected as carousel when 2+ URLs are provided. |
 
 ### Decision tree
 
-1. **Is the recipient on SMS only (no iMessage)?** Use `content.mediaUrls`. `attachments[]` is ignored on the SMS path.
-2. **Do you need to send a non-image file** (PDF, video, audio, vCard, etc.)? Use `attachments[]` with `type: "url"` or `type: "base64"`. SMS/MMS cannot carry arbitrary file types in all carrier networks — [check capabilities](/api-reference#get-v1capabilitiesphonenumber) first.
-3. **Do you want to send 2+ images as a carousel?** Use `content.mediaUrls`. Do not use `attachments[]` for this — only `mediaUrls` triggers carousel messageType.
-4. **Do you have raw bytes** (not a public URL) and need to send over iMessage? Use `attachments[]` with `type: "base64"`.
-5. **Everything else (single image over iMessage with an HTTPS URL):** either works; prefer `attachments[]` for explicit control over `mimeType` and `filename`.
+1. **Do you need to send a non-image file** (PDF, video, audio, vCard, etc.)? Use `attachments[]` with `type: "url"` or `type: "base64"`. SMS/MMS cannot carry arbitrary file types in all carrier networks — [check capabilities](/api-reference#get-v1capabilitiesphonenumber) first.
+2. **Do you want to send 2+ images as a carousel** (single grouped iMessage bubble)? Use `content.mediaUrls`. Do not use `attachments[]` for this — only `mediaUrls` triggers carousel messageType.
+3. **Do you have raw bytes** (not a public URL)? Use `attachments[]` with `type: "base64"`.
+4. **Everything else (single image with an HTTPS URL):** either works; prefer `attachments[]` for explicit control over `mimeType` and `filename`.
 
 ### Do not combine
 
-Do not set both `attachments[]` and `content.mediaUrls` on the same request. If you do, `attachments[]` wins on the iMessage path and `mediaUrls` wins on the SMS path, which results in different payloads depending on which channel the router picks — almost never what you want.
+Do not set both `attachments[]` and `content.mediaUrls` on the same request. If you do, `attachments[]` is sent on the iMessage path and `mediaUrls` is sent on the SMS path, which produces different payloads depending on which channel the router picks — almost never what you want.
 
 ## With Attachments
 
@@ -326,7 +325,7 @@ If a message with the same key already exists, the API returns `200 OK` with the
 | `routing.preference` | string[] | No | Channel priority (default: `["imessage", "sms"]`) |
 | `routing.fallback` | boolean | No | Enable fallback (default: `true`) |
 | `replyTo` | string | No | Message ID to reply to (iMessage only) |
-| `attachments` | object[] | No | File attachments (iMessage only) |
+| `attachments` | object[] | No | File attachments. iMessage and SMS/MMS; on SMS each attachment is delivered as a separate MMS, carrier-dependent for non-image MIME types. |
 | `attachments[].type` | string | No | Attachment type: `"url"` or `"base64"` |
 | `attachments[].url` | string | No | URL of the attachment (when type is `url`) |
 | `attachments[].data` | string | No | Base64-encoded file data (when type is `base64`) |

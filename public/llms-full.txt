@@ -534,7 +534,7 @@ Every request must include at least one of `content.text` (non-empty), `content.
 | routing.preference | string[] | No | Channel priority (default: ["imessage", "sms"]) |
 | routing.fallback | boolean | No | Enable fallback (default: true) |
 | replyTo | string | No | Message ID to reply to (iMessage only) |
-| attachments | object[] | No | File attachments (iMessage only) |
+| attachments | object[] | No | File attachments. iMessage and SMS/MMS; on SMS each attachment is delivered as a separate MMS, carrier-dependent for non-image MIME types. |
 | attachments[].type | string | No | Attachment type: "url" or "base64" |
 | attachments[].url | string | No | URL of attachment (when type is "url") |
 | attachments[].data | string | No | Base64-encoded file data (when type is "base64") |
