@@ -1509,7 +1509,7 @@ Emoji reactions (iOS 17+):
 
 | Field | Description |
 |-------|-------------|
-| reaction.type | Reaction type. iMessage: `love`, `like`, `dislike`, `laugh`, `emphasize`, `question`, `emoji`, `remove`. WhatsApp: the raw emoji character (e.g. `❤️`, `🔥`), or `remove` when the reaction was cleared. The `remove` spelling is shared across both channels — a single string covers a cleared reaction regardless of channel. |
+| reaction.type | Reaction type. iMessage: `love`, `like`, `dislike`, `laugh`, `emphasize`, `question`, `emoji`, `remove`. WhatsApp: the raw emoji character (e.g. `❤️`, `🔥`), or `remove` when the reaction was cleared. |
 | reaction.emoji | The emoji character. Present on iMessage when `type` is `emoji` (iOS 17+), and on WhatsApp whenever a non-empty emoji was sent |
 | reaction.targetMessageId | Internal `messageId` the reaction was applied to (null if not found) |
 | reaction.targetExternalId | Provider-assigned GUID of the original message |
