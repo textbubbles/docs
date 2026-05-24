@@ -187,6 +187,7 @@ Send-path errors surface on the message as `errorCode` (pull via `GET /v1/messag
 | Error code | Meaning |
 |---|---|
 | `NO_CHANNEL_AVAILABLE` | None of the channels in `routing.preference` are available for this recipient — e.g. `{"preference":["whatsapp"], "fallback":false}` to a number not on WhatsApp. Include `"imessage"` / `"sms"` in the preference list (with `fallback: true`) if you want graceful degradation. |
+| `FROM_INSTANCE_CANNOT_REACH` | You supplied an explicit `from` address and that specific sender cannot reach the recipient on any of the requested channels — for example, the `from` number is not paired with WhatsApp. Pair the sender or pick a `from` that supports the channel. |
 | `WHATSAPP_NOT_CONNECTED` | No paired WhatsApp session for this number. Pair via the admin panel. |
 | `WHATSAPP_SEND_FAILED` | The WhatsApp send failed for an unexpected reason (transient upstream error, attachment URL unfetchable, etc.). Safe to retry. |
 | `WHATSAPP_MEDIA_TOO_LARGE` | Attachment exceeds WhatsApp's size limits (16 MB image / 64 MB video / 100 MB document). |

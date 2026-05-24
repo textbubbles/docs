@@ -240,6 +240,7 @@ An instance can have multiple warnings at the same time. Warnings are cleared au
 | `REPLY_NOT_FOUND` | 404 | Reply target message not found |
 | `CHANNEL_NOT_SUPPORTED` | 400 | Operation not supported on channel |
 | `NO_CHANNEL_AVAILABLE` | 400 | Recipient not reachable |
+| `FROM_INSTANCE_CANNOT_REACH` | 400 | The specified `from` address cannot reach the recipient on any of the requested channels |
 | `INVALID_RECIPIENT` | 400 | Must provide exactly one of `to` or `conversationId` on send |
 | `CONVERSATION_NOT_FOUND` | 404 | `conversationId` does not match any conversation for this customer |
 | `CONVERSATION_NOT_READY` | 409 | Conversation has no provider chat yet; retry after the chat is created |

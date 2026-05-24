@@ -1556,6 +1556,7 @@ Top-level status is "ok" when database and Redis are reachable, "degraded" if ei
 | REPLY_NOT_FOUND | 404 | Reply target message not found |
 | CHANNEL_NOT_SUPPORTED | 400 | Operation not supported on channel |
 | NO_CHANNEL_AVAILABLE | 400 | Recipient not reachable |
+| FROM_INSTANCE_CANNOT_REACH | 400 | The specified `from` address cannot reach the recipient on any of the requested channels |
 | INVALID_RECIPIENT | 400 | Must provide exactly one of `to` or `conversationId` on send |
 | CONVERSATION_NOT_FOUND | 404 | `conversationId` does not match any conversation for this customer |
 | CONVERSATION_NOT_READY | 409 | Conversation has no provider chat yet; retry after the chat is created |
@@ -1702,6 +1703,7 @@ Inbound media (photos, videos, voice notes, documents, stickers) is surfaced as 
 Send-path error codes surface on the message as `errorCode` (GET /v1/messages/:id) and on message.failed webhook events.
 
 - NO_CHANNEL_AVAILABLE — none of the channels in routing.preference are available for this recipient (e.g. {"preference":["whatsapp"], "fallback":false} to a number not on WhatsApp). Include "imessage" or "sms" in the preference with fallback:true for graceful degradation.
+- FROM_INSTANCE_CANNOT_REACH — an explicit `from` was supplied and that specific sender cannot reach the recipient on any of the requested channels (e.g. the `from` number is not paired with WhatsApp). Pair the sender or pick a `from` that supports the channel.
 - WHATSAPP_NOT_CONNECTED — no paired WhatsApp session for this number. Pair via Settings → WhatsApp in the textbubbles UI or the /v1/whatsapp/** API.
 - WHATSAPP_SEND_FAILED — generic send failure (transient upstream, unfetchable attachment URL, etc). Safe to retry.
 - WHATSAPP_MEDIA_TOO_LARGE — attachment exceeds WhatsApp's size limits (16 MB image / 64 MB video / 100 MB document)
