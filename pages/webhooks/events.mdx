@@ -142,8 +142,26 @@ Delivery-status events (`message.sent`, `message.delivered`, `message.read`, `me
 | `externalMessageId` | Provider-level GUID |
 | `channel` | `imessage`, `sms`, or `whatsapp` |
 | `readAt` | ISO-8601 timestamp (present on `message.read` only) |
+| `error` | Failure reason. Present on `message.failed` only. **Always a plain string** — either a short error code (e.g. `NO_CHANNEL_AVAILABLE`) or a human-readable message from the upstream provider. Not an object; do not read `error.message` |
 
 > `message.read` fires for iMessage and WhatsApp when the recipient has read receipts enabled on their device. It is a **distinct** event from `message.delivered` — do not collapse them when tracking delivery state. SMS does not emit `message.read`.
+
+### `message.failed` example
+
+```json
+{
+  "id": "evt_def456",
+  "type": "message.failed",
+  "timestamp": "2026-03-28T10:00:09.000Z",
+  "data": {
+    "messageId": "msg_xyz789",
+    "channel": "whatsapp",
+    "error": "NO_CHANNEL_AVAILABLE"
+  }
+}
+```
+
+`externalMessageId` is omitted when the failure occurs before the message reached the upstream provider (e.g. routing failures). `error` is always a string — log it directly rather than treating it as a structured object.
 
 ### Per-Channel Reliability
 
@@ -216,6 +234,14 @@ Not every event fires for every channel. The matrix below documents which events
 | `otp` | object \| absent | Present when TextBubbles detected a 2FA / verification code in the inbound body (WhatsApp signup, bank OTP, etc.). See [OTP detection](#otp-detection) below |
 
 > **Replying to inbound messages:** always use `messageId` (internal), not `externalMessageId`, when invoking TextBubbles API endpoints. For example, to react to the inbound message above, `POST /v1/messages/msg_xyz789/reactions`.
+
+### WhatsApp group inbound
+
+WhatsApp messages received from a group chat are currently emitted as `message.inbound` events. The `from` field is set to the **group's identifier expressed as an E.164-shaped string** (the platform synthesizes one from the group's stable internal ID), not the individual sender's number — so a single value identifies the group, but it is **not** a real mobile number and will not match a contact's E.164.
+
+The webhook payload does not currently include a dedicated `isGroup` flag or `chat` object. If you do not want to surface group threads in your inbox, the recommended workaround is to maintain an allowlist of expected fan E.164 numbers and drop inbounds whose `from` is not on the list; group-emitted values will fall outside that set. A first-class group-inbound shape is on the roadmap.
+
+> Sending **into** an existing WhatsApp group is fully supported and uses the JID form `to: "...@g.us"` — see [WhatsApp → Sending](/whatsapp#sending). The note above is specifically about the **inbound** webhook shape.
 
 ### Verification / OTP codes are suppressed
 
