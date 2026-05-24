@@ -26,5 +26,8 @@ jobs:
       - name: Lint
         run: npm run lint || true
 
+      - name: Check llms.txt / llms-full.txt drift
+        run: npm run check-llms-drift
+
       - name: Build
         run: npm run build
