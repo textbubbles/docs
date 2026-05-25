@@ -18,6 +18,45 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 
 The `to` field accepts phone numbers in E.164 format (e.g., `+14155551234`) or iMessage email addresses (e.g., `user@example.com`).
 
+## Sending to a Chat (`chatId`)
+
+To send into an existing chat (group or 1:1), pass `chatId` instead of `to`. The `chatId` value is the `conversationId` UUID returned from [`POST /v1/chats/groups`](/chats#post-v1chatsgroups--create-a-group-chat) or [`GET /v1/chats/:chatId`](/chats#get-v1chatschatid--get-chat-info).
+
+- `to` and `chatId` are mutually exclusive — provide exactly one. Supplying both, or neither, returns `400 INVALID_REQUEST`.
+- The channel and sender instance are pinned to the chat; `routing.preference` and `routing.fallback` are ignored.
+- If `from` is supplied, it must resolve to the same instance the chat is pinned to. A mismatch returns `400 FROM_INSTANCE_CANNOT_REACH`.
+- An unknown or foreign `chatId` returns `404 CONVERSATION_NOT_FOUND`.
+- Group send on SMS is not supported; returns `400 GROUP_SMS_UNSUPPORTED`.
+- `createContact` is ignored (no single recipient).
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chatId": "550e8400-e29b-41d4-a716-446655440000",
+    "content": { "text": "Hey team" }
+  }'
+```
+
+Response (`202 Accepted`):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_abc123",
+    "status": "queued",
+    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
+    "from": "+14155551234",
+    "createdAt": "2026-05-25T10:00:00.000Z"
+  },
+  "requestId": "req_abc123"
+}
+```
+
+When the send is keyed by `chatId`, the 202 response carries `conversationId` (the same UUID) in place of `to`. See [Chats](/chats) for creating and managing chats.
+
 ## Sender Address (`from`)
 
 By default, messages are sent from your customer's default authorized address. You can specify a different authorized address with the `from` field:
@@ -316,8 +355,9 @@ If a message with the same key already exists, the API returns `200 OK` with the
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `to` | string | Yes | Recipient phone number (E.164) or iMessage email address |
-| `from` | string | No | Sender address (must be authorized for your customer; uses default if omitted) |
+| `to` | string | Conditionally | Recipient phone number (E.164) or iMessage email address. Required unless `chatId` is provided; mutually exclusive with `chatId` |
+| `chatId` | string (UUID) | Conditionally | Conversation UUID (the `conversationId` from `POST /v1/chats/groups`). Sends into the existing chat; channel and instance are pinned. Required unless `to` is provided; mutually exclusive with `to` |
+| `from` | string | No | Sender address (must be authorized for your customer; uses default if omitted). When `chatId` is supplied, must resolve to the chat's pinned instance |
 | `content.text` | string | No | Message text (up to 10,000 chars). Optional if `content.mediaUrls` is provided |
 | `content.mediaUrls` | string[] | No | Array of 1-20 HTTPS image URLs. When 2+ URLs are provided, sends as an image carousel |
 | `routing.preference` | string[] | No | Channel priority (default: `["imessage", "sms"]`) |

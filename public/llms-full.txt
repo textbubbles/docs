@@ -274,7 +274,7 @@ curl -X POST https://api.textbubbles.com/v1/messages \
   }'
 ```
 
-The `to` field accepts phone numbers in E.164 format (e.g., `+14155551234`) or iMessage email addresses (e.g., `user@example.com`).
+The `to` field accepts phone numbers in E.164 format (e.g., `+14155551234`) or iMessage email addresses (e.g., `user@example.com`). To send into an existing chat instead, pass `chatId` (a conversation UUID) — see "Sending to a Chat" below.
 
 ## Sender Address (from)
 
@@ -566,22 +566,42 @@ Include an `idempotencyKey` to prevent duplicate sends during retries:
 
 If a message with the same key already exists, the API returns 200 OK with the existing message.
 
-## Group Chats — POST /v1/messages with conversationId
+## Sending to a Chat — POST /v1/messages with chatId
 
-Send into an existing group chat (or any pinned conversation) by passing `conversationId` instead of `to`. The `conversationId` is returned from `POST /v1/chats/groups`. Exactly one of `to` or `conversationId` must be provided.
+Send into an existing chat (group or 1:1) by passing `chatId` instead of `to`. The `chatId` value is the `conversationId` UUID returned from `POST /v1/chats/groups` or `GET /v1/chats/:chatId`. Exactly one of `to` or `chatId` must be provided.
 
 ```bash
 curl -X POST https://api.textbubbles.com/v1/messages \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
+    "chatId": "550e8400-e29b-41d4-a716-446655440000",
     "content": { "text": "Hey team" }
   }'
 ```
 
-When `conversationId` is used:
-- The channel is pinned to whatever the conversation was created on; `routing` and `fallback` are ignored.
+Response (202 Accepted):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_abc123",
+    "status": "queued",
+    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
+    "from": "+14155551234",
+    "createdAt": "2026-05-25T10:00:00.000Z"
+  },
+  "requestId": "req_abc123"
+}
+```
+
+When `chatId` is used:
+- The 202 response carries `conversationId` (same UUID) in place of `to`.
+- The channel and sender instance are pinned to the chat; `routing.preference` and `routing.fallback` are ignored.
+- If `from` is supplied, it must resolve to the chat's pinned instance — a mismatch returns 400 FROM_INSTANCE_CANNOT_REACH.
+- An unknown or foreign `chatId` returns 404 CONVERSATION_NOT_FOUND.
+- Supplying both `to` and `chatId`, or neither, returns 400 INVALID_REQUEST.
 - Group send on SMS is not supported; returns 400 GROUP_SMS_UNSUPPORTED.
 - `createContact` is ignored (no single recipient).
 
@@ -594,7 +614,7 @@ curl -X POST https://api.textbubbles.com/v1/chats/groups \
   -d '{ "participants": ["+14155551234", "+14155559876"], "name": "Launch Team" }'
 ```
 
-Response data: `{ chatId, conversationId, participants, name, createdAt }`. Use `conversationId` for sends; `chatId` for chat-level endpoints (rename, add/remove participant, leave).
+Response data: `{ chatId, conversationId, participants, name, createdAt }`. Use `conversationId` as the `chatId` field value on `POST /v1/messages`; use `chatId` (provider GUID) on chat-level endpoints (rename, add/remove participant, leave).
 
 ## Full Request Schema — POST /v1/messages
 
@@ -602,9 +622,9 @@ Every request must include at least one of `content.text` (non-empty), `content.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| to | string | Conditionally | Recipient phone number (E.164) or iMessage email address. Required unless conversationId is provided. |
-| conversationId | string | Conditionally | UUID of an existing conversation for group or pinned sends. Required unless to is provided. |
-| from | string | No | Sender address (must be authorized; uses default if omitted) |
+| to | string | Conditionally | Recipient phone number (E.164) or iMessage email address. Required unless chatId is provided; mutually exclusive with chatId. |
+| chatId | string (UUID) | Conditionally | Conversation UUID (the `conversationId` from POST /v1/chats/groups). Sends into the existing chat; channel and instance are pinned. Required unless to is provided; mutually exclusive with to. |
+| from | string | No | Sender address (must be authorized; uses default if omitted). When chatId is supplied, must resolve to the chat's pinned instance. |
 | content.text | string | No | Message text (up to 10,000 chars). Optional if content.mediaUrls or attachments[] is provided. May be omitted or empty for attachment-only messages (voice notes, images with no caption). |
 | content.mediaUrls | string[] | No | Array of 1-20 HTTPS image URLs. When 2+ URLs are provided, sends as an image carousel |
 | routing.preference | string[] | No | Channel priority (default: ["imessage", "sms"]). Allowed values: "imessage", "sms", "whatsapp" |
@@ -2056,9 +2076,9 @@ An instance can have multiple warnings at the same time. Warnings are cleared au
 | REPLY_NOT_FOUND | 404 | Reply target message not found |
 | CHANNEL_NOT_SUPPORTED | 400 | Operation not supported on channel |
 | NO_CHANNEL_AVAILABLE | 400 | Recipient not reachable |
-| FROM_INSTANCE_CANNOT_REACH | 400 | The specified `from` address cannot reach the recipient on any of the requested channels |
-| INVALID_RECIPIENT | 400 | Must provide exactly one of `to` or `conversationId` on send |
-| CONVERSATION_NOT_FOUND | 404 | `conversationId` does not match any conversation for this customer |
+| FROM_INSTANCE_CANNOT_REACH | 400 | The specified `from` address cannot reach the recipient on any of the requested channels, or — for `chatId` sends — does not match the instance the chat is pinned to |
+| INVALID_REQUEST | 400 | Request shape is invalid. On POST /v1/messages: `to` and `chatId` were both supplied, or neither was supplied (exactly one is required) |
+| CONVERSATION_NOT_FOUND | 404 | `chatId` does not match any conversation for this customer |
 | CONVERSATION_NOT_READY | 409 | Conversation has no provider chat yet; retry after the chat is created |
 | GROUP_SMS_UNSUPPORTED | 400 | Group send is not supported on SMS; send to participants individually |
 | INVALID_STATUS | 400 | Operation not valid for current status |
@@ -2217,7 +2237,7 @@ Inbound media (photos, videos, voice notes, documents, stickers) is surfaced as 
 Send-path error codes surface on the message as `errorCode` (GET /v1/messages/:id) and on message.failed webhook events.
 
 - NO_CHANNEL_AVAILABLE — none of the channels in routing.preference are available for this recipient (e.g. {"preference":["whatsapp"], "fallback":false} to a number not on WhatsApp). Include "imessage" or "sms" in the preference with fallback:true for graceful degradation.
-- FROM_INSTANCE_CANNOT_REACH — an explicit `from` was supplied and that specific sender cannot reach the recipient on any of the requested channels (e.g. the `from` number is not paired with WhatsApp). Pair the sender or pick a `from` that supports the channel.
+- FROM_INSTANCE_CANNOT_REACH — an explicit `from` was supplied and that specific sender cannot reach the recipient on any of the requested channels (e.g. the `from` number is not paired with WhatsApp), or — when sending with `chatId` — the `from` resolves to a different instance than the one the chat is pinned to. Pair the sender, pick a `from` that supports the channel, or omit `from` to let the chat's pinned instance handle delivery.
 - WHATSAPP_NOT_CONNECTED — no paired WhatsApp session for this number. Pair via Settings → WhatsApp in the textbubbles UI or the /v1/whatsapp/** API.
 - WHATSAPP_SEND_FAILED — generic send failure (transient upstream, unfetchable attachment URL, etc). Safe to retry.
 - WHATSAPP_MEDIA_TOO_LARGE — attachment exceeds WhatsApp's size limits (16 MB image / 64 MB video / 100 MB document)

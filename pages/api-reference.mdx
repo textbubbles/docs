@@ -254,9 +254,9 @@ An instance can have multiple warnings at the same time. Warnings are cleared au
 | `REPLY_NOT_FOUND` | 404 | Reply target message not found |
 | `CHANNEL_NOT_SUPPORTED` | 400 | Operation not supported on channel |
 | `NO_CHANNEL_AVAILABLE` | 400 | Recipient not reachable |
-| `FROM_INSTANCE_CANNOT_REACH` | 400 | The specified `from` address cannot reach the recipient on any of the requested channels |
-| `INVALID_RECIPIENT` | 400 | Must provide exactly one of `to` or `conversationId` on send |
-| `CONVERSATION_NOT_FOUND` | 404 | `conversationId` does not match any conversation for this customer |
+| `FROM_INSTANCE_CANNOT_REACH` | 400 | The specified `from` address cannot reach the recipient on any of the requested channels, or — for `chatId` sends — does not match the instance the chat is pinned to |
+| `INVALID_REQUEST` | 400 | Request shape is invalid. On `POST /v1/messages`: `to` and `chatId` were both supplied, or neither was supplied (exactly one is required) |
+| `CONVERSATION_NOT_FOUND` | 404 | `chatId` does not match any conversation for this customer |
 | `CONVERSATION_NOT_READY` | 409 | Conversation has no provider chat yet; retry after the chat is created |
 | `GROUP_SMS_UNSUPPORTED` | 400 | Group send is not supported on SMS; send to participants individually |
 | `INVALID_STATUS` | 400 | Operation not valid for current message status |

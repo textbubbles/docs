@@ -25,7 +25,7 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 
 - [Getting Started](https://docs.textbubbles.com/getting-started): Quick start guide with code examples
 - [Authentication](https://docs.textbubbles.com/authentication): API keys, rate limiting, error responses
-- [Send Messages](https://docs.textbubbles.com/messages/send): POST /v1/messages — text, attachments, carousels, effects, replies, routing
+- [Send Messages](https://docs.textbubbles.com/messages/send): POST /v1/messages — text, attachments, carousels, effects, replies, routing, `chatId` for sending into existing chats
 - [List Messages](https://docs.textbubbles.com/messages/list): GET /v1/messages — retrieve and check status
 - [Scheduled Messages](https://docs.textbubbles.com/messages/scheduled): Schedule messages up to 30 days ahead
 - [Tapback Reactions](https://docs.textbubbles.com/messages/reactions): POST /v1/messages/:id/reactions
@@ -43,7 +43,7 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 ## Endpoint Summary
 
 ### Messages
-- POST /v1/messages — Send a message (text, attachments, carousels, effects, scheduled)
+- POST /v1/messages — Send a message (text, attachments, carousels, effects, scheduled); pass `chatId` instead of `to` to send into an existing chat
 - GET /v1/messages — List messages
 - GET /v1/messages/:id — Get message status
 - POST /v1/messages/:id/unsend — Unsend (iMessage only)
