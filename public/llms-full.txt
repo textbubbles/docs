@@ -584,7 +584,7 @@ If a message with the same key already exists, the API returns 200 OK with the e
 
 ## Sending to a Chat — POST /v1/messages with chatId
 
-Send into an existing chat (group or 1:1) by passing `chatId` instead of `to`. The `chatId` value is the `conversationId` UUID returned from `POST /v1/chats/groups` or `GET /v1/chats/:chatId`. Exactly one of `to` or `chatId` must be provided.
+Send into an existing chat (group or 1:1) by passing `chatId` instead of `to`. The `chatId` value is the `chat.chatId` UUID returned from `POST /v1/chats/groups` or `GET /v1/chats/:chatId`. Exactly one of `to` or `chatId` must be provided.
 
 ```bash
 curl -X POST https://api.textbubbles.com/v1/messages \
@@ -630,7 +630,7 @@ curl -X POST https://api.textbubbles.com/v1/chats/groups \
   -d '{ "participants": ["+14155551234", "+14155559876"], "name": "Launch Team" }'
 ```
 
-Response data: `{ chatId, conversationId, participants, name, createdAt }`. Use `conversationId` as the `chatId` field value on `POST /v1/messages`; use `chatId` (provider GUID) on chat-level endpoints (rename, add/remove participant, leave).
+Response data: `{ chat: ChatFragment, createdAt }`. `chat.chatId` is the conversation UUID — pass it as the `chatId` field on `POST /v1/messages`. `chat.providerChatGuid` is the provider chat identifier — use it as the path parameter on `/v1/chats/:chatId/*` (rename, add/remove participant, leave). See "The chat fragment" below for the full field list.
 
 ## Full Request Schema — POST /v1/messages
 
@@ -639,7 +639,7 @@ Every request must include at least one of `content.text` (non-empty), `content.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | to | string | Conditionally | Recipient phone number (E.164) or iMessage email address. Required unless chatId is provided; mutually exclusive with chatId. |
-| chatId | string (UUID) | Conditionally | Conversation UUID (the `conversationId` from POST /v1/chats/groups). Sends into the existing chat; channel and instance are pinned. Required unless to is provided; mutually exclusive with to. |
+| chatId | string (UUID) | Conditionally | Conversation UUID (the `chat.chatId` from POST /v1/chats/groups). Sends into the existing chat; channel and instance are pinned. Required unless to is provided; mutually exclusive with to. |
 | from | string | No | Sender address (must be authorized; uses default if omitted). When chatId is supplied, must resolve to the chat's pinned instance. |
 | content.text | string | No | Message text (up to 10,000 chars). Optional if content.mediaUrls or attachments[] is provided. May be omitted or empty for attachment-only messages (voice notes, images with no caption). |
 | content.mediaUrls | string[] | No | Array of 1-20 HTTPS image URLs. When 2+ URLs are provided, sends as an image carousel |
@@ -1419,14 +1419,14 @@ Fired when an incoming FaceTime call is detected on an instance.
 | attachments[].downloadUrl | string | Pre-signed URL (1 hour TTL, no API key required) |
 | attachments[].note | string \| undefined | Present only on rare failure cases when the attachment metadata reached the platform but the bytes couldn't be persisted. When present, `downloadUrl` will be absent |
 | otp | object \| absent | Present when TextBubbles detected a 2FA / verification code in the inbound body (WhatsApp signup, bank OTP, etc.). See OTP detection on inbound messages below |
-| conversation | object \| absent | Present when the inbound was attributed to a known chat. See Conversation and sender fragments below |
-| sender | object \| absent | Present alongside `conversation`. Resolves the sender to a contact when one matches |
+| chat | object \| absent | Present when the inbound was attributed to a known chat. See Chat and sender fragments below |
+| sender | object \| absent | Present alongside `chat`. Resolves the sender to a contact when one matches |
 
 Replying to inbound messages: always use `messageId` (internal), not `externalMessageId`, when invoking TextBubbles API endpoints. For example, to react to the inbound message above, `POST /v1/messages/msg_xyz789/reactions`.
 
-### Conversation and sender fragments
+### Chat and sender fragments
 
-`message.inbound` and outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include `conversation` and `sender` objects when the message is attributed to a known chat. Top-level `from`/`to` remain populated for backwards compatibility.
+`message.inbound` and outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include `chat` and `sender` objects when the message is attributed to a known chat. Top-level `from`/`to` remain populated — consumers that only read those keys continue to work.
 
 1:1 inbound:
 
@@ -1442,11 +1442,16 @@ Replying to inbound messages: always use `messageId` (internal), not `externalMe
     "to": "+19876543210",
     "text": "Hey",
     "channel": "imessage",
-    "conversation": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "isGroup": false,
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
       "providerChatGuid": "iMessage;-;+14155551234",
-      "channel": "imessage"
+      "channel": "imessage",
+      "isGroup": false,
+      "name": null,
+      "participants": [
+        { "handle": "+14155551234", "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10", "role": "member", "isPhoneResolved": true },
+        { "handle": "self", "contactId": null, "role": "self", "isPhoneResolved": true }
+      ]
     },
     "sender": {
       "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10",
@@ -1470,15 +1475,16 @@ Group inbound:
     "to": "+19876543210",
     "text": "Anyone free Saturday?",
     "channel": "imessage",
-    "conversation": {
-      "id": "660e8400-e29b-41d4-a716-446655440000",
-      "isGroup": true,
+    "chat": {
+      "chatId": "660e8400-e29b-41d4-a716-446655440000",
       "providerChatGuid": "iMessage;+;chat1234567890",
       "channel": "imessage",
-      "groupName": "Family Chat",
+      "isGroup": true,
+      "name": "Family Chat",
       "participants": [
-        { "handle": "+14155551234", "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10", "role": "member" },
-        { "handle": "+14155559876", "contactId": null, "role": "member" }
+        { "handle": "+14155551234", "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10", "role": "member", "isPhoneResolved": true },
+        { "handle": "+14155559876", "contactId": null, "role": "member", "isPhoneResolved": true },
+        { "handle": "self", "contactId": null, "role": "self", "isPhoneResolved": true }
       ]
     },
     "sender": {
@@ -1489,16 +1495,16 @@ Group inbound:
 }
 ```
 
-`conversation` fields:
+`chat` fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| id | string | Stable UUID for the conversation. Use this in any future chat-keyed call |
-| isGroup | boolean | true for group chats, false for 1:1 |
-| providerChatGuid | string \| null | Provider chat identifier (same `chatId` returned by POST /v1/chats/groups and surfaced on chat.* events) |
+| chatId | string | Stable UUID for the conversation. Pass as `chatId` on POST /v1/messages to send into the chat |
+| providerChatGuid | string \| null | Provider chat identifier (same value surfaced as the path parameter on /v1/chats/:chatId/*) |
 | channel | string | imessage, sms, or whatsapp |
-| groupName | string \| null \| absent | Group display name. Present only when isGroup is true; null if the group has no name set |
-| participants | array \| absent | Active roster. Present only when isGroup is true. Each entry: { handle, contactId, role, isPhoneResolved? }. `role` is `member`, `owner`, or `self`. `isPhoneResolved` is included on WhatsApp groups — true when `handle` is phone-based, false when `handle` is a Linked Device ID (`@lid`). Branch on `isPhoneResolved`, not on the suffix of `handle` |
+| isGroup | boolean | true for group chats, false for 1:1 |
+| name | string \| null | Group display name. null for 1:1 chats |
+| participants | array | Active roster. Each entry: { handle, contactId, role, isPhoneResolved }. `role` is `member`, `owner`, or `self`. `isPhoneResolved` is true when `handle` is phone-based or `"self"`, false when only a `@lid` is known. Branch on `isPhoneResolved`, not on the suffix of `handle` |
 
 `sender` fields:
 
@@ -1507,7 +1513,7 @@ Group inbound:
 | contactId | string \| null | UUID of the matching contact when the sender's address resolves to a contact owned by the customer; null otherwise |
 | handle | string \| null | The sender's address as the provider supplied it (E.164 phone number for SMS/WhatsApp, phone or Apple ID for iMessage) |
 
-Outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include the same `conversation` and `sender` objects when the originating outbound message was associated with a conversation. Status events for legacy outbound messages without a stored conversation omit both fields.
+Outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include the same `chat` and `sender` objects when the originating outbound message was associated with a chat. Status events for messages without a stored chat omit both fields.
 
 ### Example: WhatsApp quoted reply
 
@@ -1670,7 +1676,13 @@ Fired when a contact taps "Keep" on a voice note you sent. iMessage auto-deletes
 
 ## Chat Event Payloads
 
-All chat events share the same envelope: `externalMessageId` (provider-assigned GUID of the underlying system event), `chatId` (provider chat identifier — `iMessage;+;<guid>` or `<id>@g.us`), `actor` (who performed the action), `to` (instance phone), `channel` ("imessage" or "whatsapp"). On WhatsApp, `participant` and `actor` may be JIDs and may end in `@lid` when the phone is not yet resolved.
+All chat events share the same envelope:
+- `chatId` — the conversation UUID (channel-independent)
+- `chat` — the canonical chat fragment with `providerChatGuid`, channel, roster, etc. (see Chat and sender fragments above)
+- `externalMessageId` — provider-assigned GUID of the underlying system event
+- `actor` — handle of the contact who performed the action
+- `to` — instance phone
+- `channel` — "imessage" or "whatsapp"
 
 ### chat.participant.added / chat.participant.left
 
@@ -1681,8 +1693,23 @@ All chat events share the same envelope: `externalMessageId` (provider-assigned 
   "timestamp": "2026-04-21T10:00:00.000Z",
   "data": {
     "externalMessageId": "<system-event-guid>",
-    "chatId": "iMessage;+;chat1234567890",
-    "participant": "+14155551235",
+    "chatId": "550e8400-e29b-41d4-a716-446655440000",
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Family Chat",
+      "participants": [
+        { "handle": "+14155551235", "contactId": null, "role": "member", "isPhoneResolved": true }
+      ]
+    },
+    "participant": {
+      "handle": "+14155551235",
+      "contactId": null,
+      "role": "member",
+      "isPhoneResolved": true
+    },
     "actor": "+14155551234",
     "to": "+13105550199",
     "channel": "imessage"
@@ -1692,9 +1719,10 @@ All chat events share the same envelope: `externalMessageId` (provider-assigned 
 
 | Field | Description |
 |-------|-------------|
-| chatId | Provider chat identifier |
-| participant | Contact added to (or removed from) the chat |
-| actor | Contact who performed the action |
+| chatId | Conversation UUID |
+| chat | Canonical chat fragment after the change |
+| participant | The added (or removed) participant — same shape as entries in `chat.participants[]` |
+| actor | Handle of the contact who performed the action |
 
 ### chat.title.changed
 
@@ -1705,8 +1733,16 @@ All chat events share the same envelope: `externalMessageId` (provider-assigned 
   "timestamp": "2026-04-21T10:05:00.000Z",
   "data": {
     "externalMessageId": "<system-event-guid>",
-    "chatId": "iMessage;+;chat1234567890",
-    "title": "Weekend plans",
+    "chatId": "550e8400-e29b-41d4-a716-446655440000",
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Weekend plans",
+      "participants": []
+    },
+    "name": "Weekend plans",
     "actor": "+14155551234",
     "to": "+13105550199",
     "channel": "imessage"
@@ -1716,8 +1752,10 @@ All chat events share the same envelope: `externalMessageId` (provider-assigned 
 
 | Field | Description |
 |-------|-------------|
-| title | The new chat title |
-| actor | Contact who changed the title |
+| chatId | Conversation UUID |
+| chat | Canonical chat fragment after the rename |
+| name | The new chat name |
+| actor | Handle of the contact who changed the name |
 
 ### chat.photo.changed
 
@@ -1728,7 +1766,15 @@ All chat events share the same envelope: `externalMessageId` (provider-assigned 
   "timestamp": "2026-04-21T10:10:00.000Z",
   "data": {
     "externalMessageId": "<system-event-guid>",
-    "chatId": "iMessage;+;chat1234567890",
+    "chatId": "550e8400-e29b-41d4-a716-446655440000",
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Family Chat",
+      "participants": []
+    },
     "actor": "+14155551234",
     "to": "+13105550199",
     "channel": "imessage"
@@ -1742,9 +1788,22 @@ The event does not include the new photo — retrieve it through the chat resour
 
 # Chats
 
-Manage iMessage and WhatsApp group chats and per-chat state. The `chatId` path parameter is the provider chat identifier returned from POST /v1/chats/groups and surfaced on chat.* webhook events — `iMessage;+;<guid>` for iMessage chats, `<id>@g.us` for WhatsApp groups. Persisted chat rows surface a channel-independent UUID `conversationId` alongside `chatId` on the create and get endpoints; that UUID is what `POST /v1/messages` accepts to send into an existing chat.
+Manage iMessage and WhatsApp group chats and per-chat state. Responses return a canonical `chat` object (see "The chat fragment" below). The `chatId` path parameter on these endpoints is the provider chat identifier (`iMessage;+;<guid>` for iMessage chats, `<id>@g.us` for WhatsApp groups). The `chat.chatId` UUID returned in responses is the channel-independent identifier — pass it as `chatId` on POST /v1/messages.
 
 Channel asymmetry: POST /v1/chats/:chatId/read and POST /v1/chats/:chatId/unread are iMessage-only. They return 400 CHANNEL_NOT_SUPPORTED on WhatsApp chats — WhatsApp has no chat-level read ack. All other routes (GET, PUT /name, POST/DELETE /participants, POST /leave, POST /typing) work on both channels.
+
+## The chat fragment
+
+Every /v1/chats/* response embeds `data.chat`, a single canonical object that also appears on `message.*` and `chat.*` webhook events:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| chatId | string (UUID) | Stable identifier for the conversation. The same value across channels. Pass as `chatId` on POST /v1/messages |
+| providerChatGuid | string \| null | Provider chat identifier — `iMessage;+;<guid>` or `<id>@g.us`. The path-parameter `chatId` on /v1/chats/:chatId/* |
+| channel | string | imessage, sms, or whatsapp |
+| isGroup | boolean | true for group chats, false for 1:1 |
+| name | string \| null | Group display name. null for 1:1 chats |
+| participants | object[] | Active roster. Each entry: { handle, contactId, role, isPhoneResolved }. `role` is `member`, `owner`, or `self`. `isPhoneResolved` is true when `handle` is a phone-based identifier (E.164 or `<digits>@s.whatsapp.net`) or the `"self"` sentinel; false when only a WhatsApp Linked Device ID (`@lid`) is known |
 
 ## POST /v1/chats/groups
 
@@ -1781,10 +1840,18 @@ Response (201) — iMessage:
 {
   "success": true,
   "data": {
-    "chatId": "iMessage;+;chat1234567890",
-    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
-    "participants": ["+14155551234", "+14155559876"],
-    "name": "Launch Team",
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Launch Team",
+      "participants": [
+        { "handle": "+14155551234", "contactId": null, "role": "member", "isPhoneResolved": true },
+        { "handle": "+14155559876", "contactId": null, "role": "member", "isPhoneResolved": true },
+        { "handle": "self", "contactId": null, "role": "self", "isPhoneResolved": true }
+      ]
+    },
     "createdAt": "2026-04-21T10:00:00.000Z"
   }
 }
@@ -1796,26 +1863,23 @@ Response (201) — WhatsApp:
 {
   "success": true,
   "data": {
-    "chatId": "120363025123456789@g.us",
-    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
-    "channel": "whatsapp",
-    "participants": [
-      { "handle": "14155551234@s.whatsapp.net", "isPhoneResolved": true, "admin": null }
-    ],
-    "name": "Launch Team",
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "120363025123456789@g.us",
+      "channel": "whatsapp",
+      "isGroup": true,
+      "name": "Launch Team",
+      "participants": [
+        { "handle": "14155551234@s.whatsapp.net", "contactId": null, "role": "member", "isPhoneResolved": true },
+        { "handle": "self", "contactId": null, "role": "self", "isPhoneResolved": true }
+      ]
+    },
     "createdAt": "2026-05-25T17:00:00.000Z"
   }
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| chatId | string | Provider chat identifier. iMessage: `iMessage;+;<guid>`. WhatsApp: `<id>@g.us` |
-| conversationId | string \| undefined | UUID of the persisted conversation row. Channel-independent. Omitted if persistence failed |
-| channel | string | "imessage" or "whatsapp". Present on WhatsApp responses |
-| participants | string[] \| object[] | iMessage: plain strings. WhatsApp: `{ handle, isPhoneResolved, admin }` |
-| name | string \| undefined | Display name |
-| createdAt | string | ISO-8601 creation timestamp |
+`createdAt` is the ISO-8601 creation timestamp. See "The chat fragment" above for the `chat` field reference.
 
 ## GET /v1/chats/:chatId
 
@@ -1834,23 +1898,21 @@ Response (200):
 {
   "success": true,
   "data": {
-    "chatId": "iMessage;+;chat1234567890",
-    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
-    "participants": ["+14155551234", "+14155559876"],
-    "name": "Launch Team",
-    "isGroup": true
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Launch Team",
+      "participants": [
+        { "handle": "+14155551234", "contactId": null, "role": "member", "isPhoneResolved": true }
+      ]
+    }
   }
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| chatId | string | Provider chat identifier (`iMessage;+;<guid>` or `<id>@g.us`) |
-| conversationId | string \| undefined | UUID of the persisted conversation row |
-| channel | string | "imessage" or "whatsapp" (present on WhatsApp responses) |
-| participants | string[] \| object[] | iMessage: plain strings. WhatsApp: `{ handle, isPhoneResolved, admin }` |
-| name | string \| undefined | Display name (groups only) |
-| isGroup | boolean | true for groups, false for 1:1 |
+See "The chat fragment" above for the field reference.
 
 ## PUT /v1/chats/:chatId/name
 
@@ -1865,7 +1927,7 @@ curl -X PUT https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890
 
 Body: `{ "name": string }` (min length 1).
 
-Response: `{ "success": true, "data": { "chatId": "...", "name": "Weekend plans" } }`.
+Response: `{ "success": true, "data": { "chat": ChatFragment, "name": "Weekend plans" } }`.
 
 ## POST /v1/chats/:chatId/participants
 
@@ -1880,7 +1942,7 @@ curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat123456789
 
 Body: `{ "participant": string }` (E.164 phone or Apple ID).
 
-Response: `{ "success": true, "data": { "chatId": "...", "participant": "+14155550100" } }`.
+Response: `{ "success": true, "data": { "chat": ChatFragment, "participant": { "handle": "+14155550100", "contactId": null, "role": "member", "isPhoneResolved": true } } }`.
 
 ## DELETE /v1/chats/:chatId/participants/:participantId
 
@@ -1892,7 +1954,7 @@ curl -X DELETE \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-Response: `{ "success": true, "data": { "chatId": "...", "removedParticipant": "+14155550100" } }`.
+Response: `{ "success": true, "data": { "chat": ChatFragment, "removedParticipant": { "handle": "+14155550100", ... } } }`.
 
 ## POST /v1/chats/:chatId/leave
 
@@ -1903,7 +1965,7 @@ curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat123456789
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-Response: `{ "success": true, "data": { "chatId": "...", "left": true } }`.
+Response: `{ "success": true, "data": { "chatId": "<conversation-uuid>", "left": true } }`.
 
 ## POST /v1/chats/:chatId/read
 
@@ -1914,7 +1976,7 @@ curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat123456789
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-Response: `{ "success": true, "data": { "chatId": "...", "read": true } }`.
+Response: `{ "success": true, "data": { "chatId": "<conversation-uuid>", "read": true } }`.
 
 ## POST /v1/chats/:chatId/unread
 
@@ -1925,7 +1987,7 @@ curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat123456789
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-Response: `{ "success": true, "data": { "chatId": "...", "unread": true } }`.
+Response: `{ "success": true, "data": { "chatId": "<conversation-uuid>", "unread": true } }`.
 
 ## POST /v1/chats/:chatId/typing
 
@@ -1940,7 +2002,7 @@ curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat123456789
 
 Body: `{ "status": "start" | "stop" }`.
 
-Response: `{ "success": true, "data": { "chatId": "...", "typing": true } }`.
+Response: `{ "success": true, "data": { "chatId": "<conversation-uuid>", "typing": true } }`.
 
 ---
 
@@ -2316,8 +2378,8 @@ WhatsApp groups are managed through the same /v1/chats/* surface as iMessage gro
 
 - name is required on create. POST /v1/chats/groups with channel: "whatsapp" and no name returns 400 NAME_REQUIRED. WhatsApp groups must have a subject up-front.
 - No chat-level read ack. POST /v1/chats/:chatId/read and POST /v1/chats/:chatId/unread return 400 CHANNEL_NOT_SUPPORTED on WhatsApp chats. Acknowledge reads per-message instead.
-- LID vs PN participants. A participant may have handle ending in `@lid` (Linked Device ID) when their phone number is not yet known. Use isPhoneResolved: true|false as the source of truth — do not parse the handle suffix. isPhoneResolved appears in (a) participants[] in REST responses for WhatsApp chats and (b) conversation.participants[] in webhook payloads for events attributed to a WhatsApp group.
-- chatId format: WhatsApp groups are `<id>@g.us`. iMessage groups are `iMessage;+;<guid>`. conversationId (UUID) is the same shape on both channels and is the stable identifier.
+- LID vs PN participants. A participant may have handle ending in `@lid` (Linked Device ID) when their phone number is not yet known. Use isPhoneResolved: true|false as the source of truth — do not parse the handle suffix. isPhoneResolved appears in chat.participants[] on both REST responses and webhook payloads.
+- Path chatId format: WhatsApp groups are `<id>@g.us`. iMessage groups are `iMessage;+;<guid>`. The chat.chatId UUID returned in responses is the channel-independent identifier for sends.
 - from on create: when supplied, the group is created from that specific instance and the conversation is pinned to it. Without from, the customer's default WhatsApp instance is used.
 - Typing: POST /v1/chats/:chatId/typing works on WhatsApp. "start" maps to the `composing` presence state; "stop" maps to `paused`.
 
@@ -2338,13 +2400,17 @@ Response data shape:
 
 ```json
 {
-  "chatId": "120363025123456789@g.us",
-  "conversationId": "550e8400-e29b-41d4-a716-446655440000",
-  "channel": "whatsapp",
-  "name": "Launch Team",
-  "participants": [
-    { "handle": "14155551234@s.whatsapp.net", "isPhoneResolved": true, "admin": null }
-  ],
+  "chat": {
+    "chatId": "550e8400-e29b-41d4-a716-446655440000",
+    "providerChatGuid": "120363025123456789@g.us",
+    "channel": "whatsapp",
+    "isGroup": true,
+    "name": "Launch Team",
+    "participants": [
+      { "handle": "14155551234@s.whatsapp.net", "contactId": null, "role": "member", "isPhoneResolved": true },
+      { "handle": "self", "contactId": null, "role": "self", "isPhoneResolved": true }
+    ]
+  },
   "createdAt": "2026-05-25T17:00:00.000Z"
 }
 ```
@@ -2382,11 +2448,11 @@ chat.title.changed, chat.participant.added, and chat.participant.left can fire f
 
 ## Participant fields (WhatsApp)
 
-| Field | Type | Description |
-|-------|------|-------------|
-| handle | string | Phone JID (`<digits>@s.whatsapp.net`) when known, or `<id>@lid` when only the Linked Device ID is known |
-| isPhoneResolved | boolean | true when handle is phone-based, false when handle is a `@lid` |
-| admin | string \| null | "admin", "superadmin", or null |
+WhatsApp participants follow the canonical chat.participants[] shape — see "The chat fragment" in the Chats section. WhatsApp-specific notes:
+
+- `handle` is the phone JID (`<digits>@s.whatsapp.net`) when the phone is known, or `<id>@lid` when only the Linked Device ID is known.
+- `isPhoneResolved` is true for phone JIDs (and the `"self"` sentinel), false for `@lid`. Branch on this rather than parsing `handle`.
+- Group admins surface as `role: "owner"` (creator/superadmin) or `role: "member"`. Promotion/demotion changes are not currently emitted as chat.* webhooks — re-fetch GET /v1/chats/:chatId to reconcile.
 
 ## Error codes (WhatsApp group operations)
 

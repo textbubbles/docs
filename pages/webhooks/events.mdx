@@ -144,8 +144,8 @@ Delivery-status events (`message.sent`, `message.delivered`, `message.read`, `me
 | `externalMessageId` | Provider-level GUID |
 | `channel` | `imessage`, `sms`, or `whatsapp` |
 | `readAt` | ISO-8601 timestamp (present on `message.read` only) |
-| `conversation` | Optional object — see [Conversation and sender fragments](#conversation-and-sender-fragments). Present when the originating outbound message was associated with a conversation |
-| `sender` | Optional object — see [Conversation and sender fragments](#conversation-and-sender-fragments) |
+| `chat` | Optional object — see [Chat and sender fragments](#chat-and-sender-fragments). Present when the originating outbound message was associated with a chat |
+| `sender` | Optional object — see [Chat and sender fragments](#chat-and-sender-fragments) |
 
 > `message.read` fires for iMessage and WhatsApp when the recipient has read receipts enabled on their device. It is a **distinct** event from `message.delivered` — do not collapse them when tracking delivery state. SMS does not emit `message.read`.
 
@@ -218,8 +218,8 @@ Not every event fires for every channel. The matrix below documents which events
 | `attachments[].downloadUrl` | string | Pre-signed URL to download the attachment. Time-limited (1 hour) and self-authenticated — no API key required. Fetch directly via GET request |
 | `attachments[].note` | string \| undefined | Present only on rare failure cases when the attachment metadata reached the platform but the bytes couldn't be persisted. When present, `downloadUrl` will be absent |
 | `otp` | object \| absent | Present when TextBubbles detected a 2FA / verification code in the inbound body (WhatsApp signup, bank OTP, etc.). See [OTP detection](#otp-detection) below |
-| `conversation` | object \| absent | Present when the inbound was attributed to a known chat. See [Conversation and sender fragments](#conversation-and-sender-fragments) |
-| `sender` | object \| absent | Present alongside `conversation`. Resolves the sender to a contact when one matches. See [Conversation and sender fragments](#conversation-and-sender-fragments) |
+| `chat` | object \| absent | Present when the inbound was attributed to a known chat. See [Chat and sender fragments](#chat-and-sender-fragments) |
+| `sender` | object \| absent | Present alongside `chat`. Resolves the sender to a contact when one matches. See [Chat and sender fragments](#chat-and-sender-fragments) |
 
 > **Replying to inbound messages:** always use `messageId` (internal), not `externalMessageId`, when invoking TextBubbles API endpoints. For example, to react to the inbound message above, `POST /v1/messages/msg_xyz789/reactions`.
 
@@ -227,9 +227,9 @@ Not every event fires for every channel. The matrix below documents which events
 
 Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes, or other verification codes (e.g. Apple ID, Google, bank account codes) are **not** dispatched as `message.inbound` webhooks or emitted on the `/v1/events` stream. They are also hidden from `GET /v1/messages`.
 
-### Conversation and sender fragments
+### Chat and sender fragments
 
-`message.inbound` and outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include `conversation` and `sender` objects when the message is attributed to a known chat. Top-level `from`/`to` remain populated for backwards compatibility — consumers that only read those keys continue to work.
+`message.inbound` and outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include `chat` and `sender` objects when the message is attributed to a known chat. Top-level `from`/`to` remain populated — consumers that only read those keys continue to work.
 
 **1:1 inbound:**
 
@@ -245,11 +245,16 @@ Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes
     "to": "+19876543210",
     "text": "Hey",
     "channel": "imessage",
-    "conversation": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "isGroup": false,
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
       "providerChatGuid": "iMessage;-;+14155551234",
-      "channel": "imessage"
+      "channel": "imessage",
+      "isGroup": false,
+      "name": null,
+      "participants": [
+        { "handle": "+14155551234", "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10", "role": "member", "isPhoneResolved": true },
+        { "handle": "self", "contactId": null, "role": "self", "isPhoneResolved": true }
+      ]
     },
     "sender": {
       "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10",
@@ -273,15 +278,16 @@ Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes
     "to": "+19876543210",
     "text": "Anyone free Saturday?",
     "channel": "imessage",
-    "conversation": {
-      "id": "660e8400-e29b-41d4-a716-446655440000",
-      "isGroup": true,
+    "chat": {
+      "chatId": "660e8400-e29b-41d4-a716-446655440000",
       "providerChatGuid": "iMessage;+;chat1234567890",
       "channel": "imessage",
-      "groupName": "Family Chat",
+      "isGroup": true,
+      "name": "Family Chat",
       "participants": [
-        { "handle": "+14155551234", "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10", "role": "member" },
-        { "handle": "+14155559876", "contactId": null, "role": "member" }
+        { "handle": "+14155551234", "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10", "role": "member", "isPhoneResolved": true },
+        { "handle": "+14155559876", "contactId": null, "role": "member", "isPhoneResolved": true },
+        { "handle": "self", "contactId": null, "role": "self", "isPhoneResolved": true }
       ]
     },
     "sender": {
@@ -292,16 +298,16 @@ Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes
 }
 ```
 
-`conversation` fields:
+`chat` fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Stable UUID for the conversation. Use this in any future chat-keyed call |
-| `isGroup` | boolean | `true` for group chats, `false` for 1:1 |
-| `providerChatGuid` | string \| null | Provider chat identifier (the same `chatId` returned by `POST /v1/chats/groups` and surfaced on `chat.*` events) |
+| `chatId` | string | Stable UUID for the conversation. Use this as the `chatId` body field on `POST /v1/messages` to send into the chat |
+| `providerChatGuid` | string \| null | Provider chat identifier — the same value surfaced as the path parameter on `/v1/chats/:chatId/*` endpoints |
 | `channel` | string | `imessage`, `sms`, or `whatsapp` |
-| `groupName` | string \| null \| absent | Group display name. Present only when `isGroup` is `true`; null if the group has no name set |
-| `participants` | array \| absent | Active roster. Present only when `isGroup` is `true`. Each entry carries `handle`, `contactId`, `role`, and — on WhatsApp groups — `isPhoneResolved`. `role` is `member`, `owner`, or `self` (the customer's own instance). `isPhoneResolved` is `true` when `handle` is a phone-based identifier and `false` when only a Linked Device ID is known; treat this as the source of truth on whether the phone is resolved, rather than parsing `handle` |
+| `isGroup` | boolean | `true` for group chats, `false` for 1:1 |
+| `name` | string \| null | Group display name. `null` for 1:1 chats |
+| `participants` | array | Active roster. Each entry carries `handle`, `contactId`, `role`, and `isPhoneResolved`. `role` is `member`, `owner`, or `self` (the customer's own instance). `isPhoneResolved` is `true` when `handle` is a phone-based identifier and `false` when only a WhatsApp Linked Device ID (`@lid`) is known |
 
 `sender` fields:
 
@@ -310,7 +316,7 @@ Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes
 | `contactId` | string \| null | UUID of the matching contact when the sender's address resolves to a contact owned by the customer; `null` otherwise |
 | `handle` | string \| null | The sender's address as the provider supplied it (E.164 phone number for SMS/WhatsApp, phone or Apple ID for iMessage) |
 
-Outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include the same `conversation` and `sender` objects when the originating outbound message was associated with a conversation. Status events for legacy outbound messages without a stored conversation omit both fields.
+Outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include the same `chat` and `sender` objects when the originating outbound message was associated with a chat. Status events for messages without a stored chat omit both fields.
 
 ### Example: WhatsApp quoted reply
 
@@ -474,7 +480,13 @@ Fired when a contact taps **Keep** on a voice note you sent. iMessage auto-delet
 
 ## Chat Event Payloads
 
-All four chat events share the same envelope. Each carries `externalMessageId` (the provider-assigned GUID of the underlying system event), `chatId` (provider chat identifier — for 1:1 chats this is the contact address; for group chats it's an opaque identifier you can match against the `chat` resource), and `actor` (who performed the action).
+All chat events share the same envelope. Each carries:
+
+- `chatId` — the conversation UUID (channel-independent)
+- `chat` — the canonical [chat fragment](#chat-and-sender-fragments) with `providerChatGuid`, channel, roster, etc.
+- `externalMessageId` — provider-assigned GUID of the underlying system event
+- `actor` — handle of the contact who performed the action
+- `channel` — `"imessage"` or `"whatsapp"`
 
 ### `chat.participant.added` / `chat.participant.left`
 
@@ -485,8 +497,23 @@ All four chat events share the same envelope. Each carries `externalMessageId` (
   "timestamp": "2026-04-21T10:00:00.000Z",
   "data": {
     "externalMessageId": "<system-event-guid>",
-    "chatId": "iMessage;+;chat1234567890",
-    "participant": "+14155551235",
+    "chatId": "550e8400-e29b-41d4-a716-446655440000",
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Family Chat",
+      "participants": [
+        { "handle": "+14155551235", "contactId": null, "role": "member", "isPhoneResolved": true }
+      ]
+    },
+    "participant": {
+      "handle": "+14155551235",
+      "contactId": null,
+      "role": "member",
+      "isPhoneResolved": true
+    },
     "actor": "+14155551234",
     "to": "+13105550199",
     "channel": "imessage"
@@ -496,9 +523,10 @@ All four chat events share the same envelope. Each carries `externalMessageId` (
 
 | Field | Description |
 |-------|-------------|
-| `chatId` | Provider chat identifier (`iMessage;+;<guid>` or `<id>@g.us`) |
-| `participant` | Contact added to (or removed from) the chat. On WhatsApp, a JID; may be `<id>@lid` when the phone is not yet resolved |
-| `actor` | Contact who performed the action |
+| `chatId` | Conversation UUID |
+| `chat` | Canonical chat fragment after the change |
+| `participant` | The added (or removed) participant. Same object shape as entries in `chat.participants[]` |
+| `actor` | Handle of the contact who performed the action |
 | `channel` | `"imessage"` or `"whatsapp"` |
 
 > When the change is initiated by a customer via `/v1/chats/:chatId/participants` AND the provider fires its own event, the webhook is emitted exactly once (60-second dedup window). Implement your handler to be idempotent on `eventId` either way.
@@ -512,8 +540,16 @@ All four chat events share the same envelope. Each carries `externalMessageId` (
   "timestamp": "2026-04-21T10:05:00.000Z",
   "data": {
     "externalMessageId": "<system-event-guid>",
-    "chatId": "iMessage;+;chat1234567890",
-    "title": "Weekend plans",
+    "chatId": "550e8400-e29b-41d4-a716-446655440000",
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Weekend plans",
+      "participants": []
+    },
+    "name": "Weekend plans",
     "actor": "+14155551234",
     "to": "+13105550199",
     "channel": "imessage"
@@ -523,8 +559,10 @@ All four chat events share the same envelope. Each carries `externalMessageId` (
 
 | Field | Description |
 |-------|-------------|
-| `title` | The new chat title |
-| `actor` | Contact who changed the title |
+| `chatId` | Conversation UUID |
+| `chat` | Canonical chat fragment after the rename |
+| `name` | The new chat name |
+| `actor` | Handle of the contact who changed the name |
 | `channel` | `"imessage"` or `"whatsapp"` |
 
 > When the rename is initiated by a customer via `PUT /v1/chats/:chatId/name` AND the provider fires its own event, the webhook is emitted exactly once (60-second dedup window). Implement your handler to be idempotent on `eventId` either way.
@@ -538,7 +576,15 @@ All four chat events share the same envelope. Each carries `externalMessageId` (
   "timestamp": "2026-04-21T10:10:00.000Z",
   "data": {
     "externalMessageId": "<system-event-guid>",
-    "chatId": "iMessage;+;chat1234567890",
+    "chatId": "550e8400-e29b-41d4-a716-446655440000",
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Family Chat",
+      "participants": []
+    },
     "actor": "+14155551234",
     "to": "+13105550199",
     "channel": "imessage"

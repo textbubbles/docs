@@ -7,7 +7,7 @@ Create and manage WhatsApp groups through the same [`/v1/chats/*`](/chats) surfa
 - **`name` is required on create.** WhatsApp groups must have a subject set at creation time. `POST /v1/chats/groups` with `channel: "whatsapp"` and no `name` returns `400 NAME_REQUIRED`.
 - **No chat-level read ack.** `POST /v1/chats/:chatId/read` and `POST /v1/chats/:chatId/unread` return `400 CHANNEL_NOT_SUPPORTED` on WhatsApp chats. WhatsApp acknowledges reads per-message.
 - **LID vs PN participants.** A participant may surface with a handle ending in `@lid` (Linked Device ID) when their phone number is not yet known. Use `isPhoneResolved` to branch — do not rely on the format of `handle`.
-- **`chatId` format.** WhatsApp group IDs look like `<id>@g.us`. iMessage IDs look like `iMessage;+;<guid>`. The `conversationId` UUID is the channel-independent identifier.
+- **Path `chatId` format.** WhatsApp group IDs look like `<id>@g.us`. iMessage IDs look like `iMessage;+;<guid>`. Pass either as the path parameter on `/v1/chats/:chatId/*`. The `chat.chatId` UUID returned in responses is the channel-independent identifier for sends.
 
 ## Create a group
 
@@ -28,18 +28,24 @@ Response (201):
 {
   "success": true,
   "data": {
-    "chatId": "120363025123456789@g.us",
-    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
-    "channel": "whatsapp",
-    "name": "Launch Team",
-    "participants": [
-      { "handle": "14155551234@s.whatsapp.net", "isPhoneResolved": true, "admin": null },
-      { "handle": "14155559876@s.whatsapp.net", "isPhoneResolved": true, "admin": null }
-    ],
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "120363025123456789@g.us",
+      "channel": "whatsapp",
+      "isGroup": true,
+      "name": "Launch Team",
+      "participants": [
+        { "handle": "14155551234@s.whatsapp.net", "contactId": null, "role": "member", "isPhoneResolved": true },
+        { "handle": "14155559876@s.whatsapp.net", "contactId": null, "role": "member", "isPhoneResolved": true },
+        { "handle": "self", "contactId": null, "role": "self", "isPhoneResolved": true }
+      ]
+    },
     "createdAt": "2026-05-25T17:00:00.000Z"
   }
 }
 ```
+
+See [The chat fragment](/chats#the-chat-fragment) for the field reference.
 
 Optional `from` (E.164) pins the group to that specific instance for its lifetime; without `from`, the customer's default WhatsApp instance is used. Subsequent `/v1/chats/*` calls and sends keyed to the conversation route through the same instance.
 
@@ -101,15 +107,11 @@ curl -X POST \
 
 ## Participant fields
 
-For WhatsApp groups, `participants[]` is an array of objects (not strings):
+WhatsApp participants follow the canonical [Participants](/chats#participants) shape. WhatsApp-specific notes:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `handle` | string | Provider identifier. Phone JID (`<digits>@s.whatsapp.net`) when the phone is known, or `<id>@lid` when only the Linked Device ID is known |
-| `isPhoneResolved` | boolean | `true` if `handle` is phone-based. Branch on this rather than parsing the suffix of `handle` |
-| `admin` | string \| null | `"admin"`, `"superadmin"`, or `null` |
-
-The same shape appears in `conversation.participants[]` on webhook payloads for inbound and outbound events attributed to a WhatsApp group.
+- `handle` is the phone JID (`<digits>@s.whatsapp.net`) when the phone is known, or `<id>@lid` (Linked Device ID) when only the LID is known.
+- `isPhoneResolved` is `true` for phone JIDs (and the `"self"` sentinel), `false` for `@lid`. Branch on this rather than parsing `handle`.
+- Group admins surface as `role: "owner"` (creator/superadmin) or `role: "member"`. Promotion/demotion events are not currently delivered as `chat.*` webhooks — re-fetch `GET /v1/chats/:chatId` to reconcile.
 
 ## Webhook idempotency
 

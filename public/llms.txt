@@ -33,7 +33,7 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 - [Chats](https://docs.textbubbles.com/chats): /v1/chats/* — create groups (iMessage or WhatsApp via `channel`), rename, add/remove participants, read/unread (iMessage only), typing
 - [WhatsApp Groups](https://docs.textbubbles.com/whatsapp/groups): WhatsApp-specific quirks for /v1/chats/* — name required on create, no chat-level read ack, LID vs PN participants
 - [Webhook Setup](https://docs.textbubbles.com/webhooks/setup): Configure webhook URL, signature verification
-- [Webhook Events](https://docs.textbubbles.com/webhooks/events): All event types and payload schemas (incl. chat.* events and conversation/sender fragments)
+- [Webhook Events](https://docs.textbubbles.com/webhooks/events): All event types and payload schemas (incl. chat.* events and chat/sender fragments)
 - [Realtime Events (SSE)](https://docs.textbubbles.com/webhooks/events#realtime-sse): GET /v1/events — live event stream without hosting a webhook endpoint
 - [SDK Installation](https://docs.textbubbles.com/sdk/installation): npm install @textbubbles/js
 - [TypeScript SDK](https://docs.textbubbles.com/sdk/typescript): SDK usage guide
@@ -59,7 +59,7 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 - GET /v1/capabilities/:phone — Check iMessage/SMS/FaceTime support
 
 ### Chats
-- POST /v1/chats/groups — Create a group chat. Pass `channel: "whatsapp"` for a WhatsApp group (name is required, 400 NAME_REQUIRED otherwise). Defaults to iMessage. Returns chatId (provider id) + conversationId (UUID)
+- POST /v1/chats/groups — Create a group chat. Pass `channel: "whatsapp"` for a WhatsApp group (name is required, 400 NAME_REQUIRED otherwise). Defaults to iMessage. Returns `chat: ChatFragment` (UUID `chatId`, `providerChatGuid`, channel, isGroup, name, participants)
 - GET /v1/chats/:chatId — Get chat info
 - PUT /v1/chats/:chatId/name — Rename a group chat (iMessage + WhatsApp)
 - POST /v1/chats/:chatId/participants — Add a participant (iMessage + WhatsApp)
@@ -73,7 +73,7 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 - CHANNEL_NOT_SUPPORTED (400) — operation not available on the conversation's channel
 
 ### Webhook Events (selected)
-- message.inbound, message.sent, message.delivered, message.read, message.failed — include `conversation` and `sender` fragments when attributed to a known chat
+- message.inbound, message.sent, message.delivered, message.read, message.failed — include `chat` and `sender` fragments when attributed to a known chat
 - chat.participant.added, chat.participant.left, chat.title.changed, chat.photo.changed — emitted when iMessage group state changes
 
 ### Numbers

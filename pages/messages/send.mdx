@@ -20,7 +20,7 @@ The `to` field accepts phone numbers in E.164 format (e.g., `+14155551234`) or i
 
 ## Sending to a Chat (`chatId`)
 
-To send into an existing chat (group or 1:1), pass `chatId` instead of `to`. The `chatId` value is the `conversationId` UUID returned from [`POST /v1/chats/groups`](/chats#post-v1chatsgroups--create-a-group-chat) or [`GET /v1/chats/:chatId`](/chats#get-v1chatschatid--get-chat-info).
+To send into an existing chat (group or 1:1), pass `chatId` instead of `to`. The `chatId` value is the `chat.chatId` UUID returned from [`POST /v1/chats/groups`](/chats#post-v1chatsgroups--create-a-group-chat) or [`GET /v1/chats/:chatId`](/chats#get-v1chatschatid--get-chat-info).
 
 - `to` and `chatId` are mutually exclusive — provide exactly one. Supplying both, or neither, returns `400 INVALID_REQUEST`.
 - The channel and sender instance are pinned to the chat; `routing.preference` and `routing.fallback` are ignored.
@@ -55,7 +55,7 @@ Response (`202 Accepted`):
 }
 ```
 
-When the send is keyed by `chatId`, the 202 response carries `conversationId` (the same UUID) in place of `to`. See [Chats](/chats) for creating and managing chats.
+When the send is keyed by `chatId`, the 202 response carries `conversationId` (the same UUID) in place of `to`. The matching `message.*` lifecycle webhooks for this send carry the full `chat` fragment — see [Chat and sender fragments](/webhooks/events#chat-and-sender-fragments).
 
 ## Sender Address (`from`)
 
@@ -376,7 +376,7 @@ If a message with the same key already exists, the API returns `200 OK` with the
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `to` | string | Conditionally | Recipient phone number (E.164) or iMessage email address. Required unless `chatId` is provided; mutually exclusive with `chatId` |
-| `chatId` | string (UUID) | Conditionally | Conversation UUID (the `conversationId` from `POST /v1/chats/groups`). Sends into the existing chat; channel and instance are pinned. Required unless `to` is provided; mutually exclusive with `to` |
+| `chatId` | string (UUID) | Conditionally | Conversation UUID (the `chat.chatId` returned by `POST /v1/chats/groups`). Sends into the existing chat; channel and instance are pinned. Required unless `to` is provided; mutually exclusive with `to` |
 | `from` | string | No | Sender address (must be authorized for your customer; uses default if omitted). When `chatId` is supplied, must resolve to the chat's pinned instance |
 | `content.text` | string | No | Message text (up to 10,000 chars). Optional if `content.mediaUrls` is provided |
 | `content.mediaUrls` | string[] | No | Array of 1-20 HTTPS image URLs. When 2+ URLs are provided, sends as an image carousel |
