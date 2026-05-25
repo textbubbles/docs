@@ -148,6 +148,18 @@ Scans the last 15 minutes of inbound messages to this number for anything matchi
 
 See [Send Messages](/messages/send#whatsapp) for the full request shape. The `routing.preference` field decides which channel to try first; `to` is an E.164 phone number for individuals or a `...@g.us` JID for existing groups.
 
+### Video formats
+
+Preferred (sent as-is): **MP4 with H.264 video and AAC audio** (or no audio track).
+
+Other H.264 containers (`.mov`, `.mkv`, `.webm-with-H.264`, etc.) are repackaged into MP4 without re-encoding. Any other format is transcoded to H.264/AAC in MP4 before send; transcoding adds latency proportional to input size and codec.
+
+### Voice notes
+
+Preferred (sent as-is): **Opus in OGG**.
+
+Any other audio format sent with `attachments[].isAudioMessage: true` is transcoded to Opus-in-OGG before send.
+
 ## Reactions
 
 `POST /v1/messages/:id/reactions` works the same as for iMessage; the same `type` values apply on WhatsApp:
