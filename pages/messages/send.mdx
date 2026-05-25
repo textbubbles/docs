@@ -52,7 +52,7 @@ See [Message Effects](/messages/effects) for all available effects.
 
 ## Reply to a Message
 
-Create a threaded reply using the `replyTo` field (iMessage only):
+Create a threaded reply using the `replyTo` field (iMessage and WhatsApp):
 
 ```bash
 curl -X POST https://api.textbubbles.com/v1/messages \
@@ -126,9 +126,16 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 
 ## Voice Memos
 
-To send an audio file as a native iMessage voice-memo bubble (inline player with waveform) instead of a generic file attachment, set `isAudioMessage: true` on the attachment. Voice memos are attachment-only — either omit `content.text` (send `"content": {}`) or pass `"text": ""`. Both are accepted.
+To send an audio file as a native voice-memo bubble (inline player with waveform) instead of a generic file attachment, set `isAudioMessage: true` on the attachment. Voice memos are attachment-only — either omit `content.text` (send `"content": {}`) or pass `"text": ""`. Both are accepted. Supported on iMessage and WhatsApp.
 
-Accepted formats: any audio (MP3, Opus/AAC/PCM in CAF, webm, m4a, ogg, wav, …). The server normalizes non-compatible inputs to Opus-in-CAF — the format iMessage's voice-memo UI can read. If you can, encode client-side to Opus-in-CAF to skip the extra server transcode.
+Preferred audio formats by channel (sent as-is):
+
+| Channel | Preferred format |
+|---|---|
+| iMessage | MP3 or Opus-in-CAF |
+| WhatsApp | Opus-in-OGG |
+
+Any other audio format is transcoded server-side to the channel's preferred format before send.
 
 ```bash
 curl -X POST https://api.textbubbles.com/v1/messages \
@@ -150,6 +157,19 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 ```
 
 Without `isAudioMessage: true`, the audio file arrives as a generic file attachment that the recipient must tap to download.
+
+## Video
+
+Send video by including a `video/*` attachment in `attachments[]`. Supported on iMessage, SMS/MMS (carrier-dependent), and WhatsApp.
+
+Preferred video formats by channel (sent as-is):
+
+| Channel | Preferred format |
+|---|---|
+| iMessage | Any common container (MP4, MOV, M4V) — no server-side transcoding |
+| WhatsApp | MP4 with H.264 video and AAC audio |
+
+WhatsApp specifically: H.264 in other containers (`.mov`, `.mkv`, etc.) is repackaged into MP4 without re-encoding. Any other format is transcoded to H.264/AAC in MP4 before send; transcoding adds latency proportional to input size and codec.
 
 ## Base64 Attachments
 
@@ -322,14 +342,14 @@ If a message with the same key already exists, the API returns `200 OK` with the
 | `content.mediaUrls` | string[] | No | Array of 1-20 HTTPS image URLs. When 2+ URLs are provided, sends as an image carousel |
 | `routing.preference` | string[] | No | Channel priority (default: `["imessage", "sms"]`) |
 | `routing.fallback` | boolean | No | Enable fallback (default: `true`) |
-| `replyTo` | string | No | Message ID to reply to (iMessage only) |
+| `replyTo` | string | No | Message ID to reply to (iMessage and WhatsApp) |
 | `attachments` | object[] | No | File attachments. iMessage and SMS/MMS; on SMS each attachment is delivered as a separate MMS, carrier-dependent for non-image MIME types. |
 | `attachments[].type` | string | No | Attachment type: `"url"` or `"base64"` |
 | `attachments[].url` | string | No | URL of the attachment (when type is `url`) |
 | `attachments[].data` | string | No | Base64-encoded file data (when type is `base64`) |
 | `attachments[].mimeType` | string | No | MIME type of the attachment |
 | `attachments[].filename` | string | No | Original filename |
-| `attachments[].isAudioMessage` | boolean | No | Render as a native iMessage voice-memo bubble (inline player). Accepts any audio format — the server transcodes non-compatible inputs (anything except Opus-in-CAF) to Opus-in-CAF. iMessage only. |
+| `attachments[].isAudioMessage` | boolean | No | Render as a native voice-memo bubble (inline player). Supported on iMessage and WhatsApp; the server transcodes non-compatible inputs to the channel's preferred format (Opus-in-CAF for iMessage, Opus-in-OGG for WhatsApp). Other channels deliver the file as a generic attachment. |
 | `effect` | string | No | Message effect (iMessage only) |
 | `scheduledAt` | string | No | ISO 8601 datetime for scheduled delivery |
 | `idempotencyKey` | string | No | Unique key for deduplication |
