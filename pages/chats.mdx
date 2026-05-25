@@ -1,0 +1,271 @@
+# Chats
+
+Manage iMessage group chats and per-chat state via the `/v1/chats/*` endpoints.
+
+> All endpoints require a Bearer token (`Authorization: Bearer tb_xxxxx`). The `chatId` path parameter is the provider-assigned chat GUID returned from `POST /v1/chats/groups` and surfaced on `chat.*` webhook events. Chats are also persisted server-side as conversations; `conversationId` (a UUID) is returned alongside `chatId` on the create and get endpoints, and is the value used for sends keyed to an existing chat.
+
+## POST /v1/chats/groups — Create a group chat
+
+Create a new iMessage group chat with one or more participants. An optional `name` sets the initial group title.
+
+### Request
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/groups \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "participants": ["+14155551234", "+14155559876"],
+    "name": "Launch Team"
+  }'
+```
+
+### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `participants` | string[] | Yes | One or more phone numbers (E.164) or Apple IDs to add to the group |
+| `name` | string | No | Initial display name for the group |
+
+### Response (201)
+
+```json
+{
+  "success": true,
+  "data": {
+    "chatId": "iMessage;+;chat1234567890",
+    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
+    "participants": ["+14155551234", "+14155559876"],
+    "name": "Launch Team",
+    "createdAt": "2026-04-21T10:00:00.000Z"
+  },
+  "requestId": "req_abc123"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `chatId` | string | Provider-assigned chat GUID. Use on the other `/v1/chats/*` endpoints |
+| `conversationId` | string \| undefined | UUID of the persisted conversation row. Omitted if persistence failed (the chat itself still exists) |
+| `participants` | string[] | Roster as the provider returned it |
+| `name` | string \| undefined | Display name (echoed `name` from the request, or what the provider stored) |
+| `createdAt` | string | ISO-8601 creation timestamp |
+
+## GET /v1/chats/:chatId — Get chat info
+
+Retrieve metadata for a specific chat, including participants and the display name.
+
+### Request
+
+```bash
+curl https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+URL-encode the `chatId` — it contains `;` characters that some HTTP clients treat as path separators.
+
+### Response (200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "chatId": "iMessage;+;chat1234567890",
+    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
+    "participants": ["+14155551234", "+14155559876"],
+    "name": "Launch Team",
+    "isGroup": true
+  },
+  "requestId": "req_abc123"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `chatId` | string | Provider-assigned chat GUID |
+| `conversationId` | string \| undefined | UUID of the persisted conversation row |
+| `participants` | string[] | Current roster |
+| `name` | string \| undefined | Display name (groups only) |
+| `isGroup` | boolean | `true` for groups, `false` for 1:1 chats |
+
+## PUT /v1/chats/:chatId/name — Rename a group chat
+
+Change the display name of an existing group chat. Only meaningful on group conversations.
+
+### Request
+
+```bash
+curl -X PUT https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/name \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Weekend plans" }'
+```
+
+### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | New display name (min length 1) |
+
+### Response (200)
+
+```json
+{
+  "success": true,
+  "data": { "chatId": "iMessage;+;chat1234567890", "name": "Weekend plans" },
+  "requestId": "req_abc123"
+}
+```
+
+The rename fires a `chat.title.changed` webhook event to participants — see [Webhook Event Reference](/webhooks/events#chattitlechanged).
+
+## POST /v1/chats/:chatId/participants — Add a participant
+
+Add a single participant to an existing group chat.
+
+### Request
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/participants \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "participant": "+14155550100" }'
+```
+
+### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `participant` | string | Yes | Phone number (E.164) or Apple ID of the participant to add |
+
+### Response (200)
+
+```json
+{
+  "success": true,
+  "data": { "chatId": "iMessage;+;chat1234567890", "participant": "+14155550100" },
+  "requestId": "req_abc123"
+}
+```
+
+Emits `chat.participant.added`.
+
+## DELETE /v1/chats/:chatId/participants/:participantId — Remove a participant
+
+Remove a participant from an existing group chat. `participantId` is the participant's phone number or Apple ID.
+
+### Request
+
+```bash
+curl -X DELETE \
+  "https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/participants/+14155550100" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response (200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "chatId": "iMessage;+;chat1234567890",
+    "removedParticipant": "+14155550100"
+  },
+  "requestId": "req_abc123"
+}
+```
+
+Emits `chat.participant.left`.
+
+## POST /v1/chats/:chatId/leave — Leave a group chat
+
+Leave a group chat. After this call your sender address will stop receiving messages from the chat.
+
+### Request
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/leave \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response (200)
+
+```json
+{
+  "success": true,
+  "data": { "chatId": "iMessage;+;chat1234567890", "left": true },
+  "requestId": "req_abc123"
+}
+```
+
+## POST /v1/chats/:chatId/read — Mark a chat as read
+
+Mark all messages in the chat as read. Sends read receipts to the other participants if receipts are enabled.
+
+### Request
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/read \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response (200)
+
+```json
+{
+  "success": true,
+  "data": { "chatId": "iMessage;+;chat1234567890", "read": true },
+  "requestId": "req_abc123"
+}
+```
+
+## POST /v1/chats/:chatId/unread — Mark a chat as unread
+
+Set the unread indicator on the chat. Requires macOS 13 or later on the sender's instance.
+
+### Request
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/unread \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response (200)
+
+```json
+{
+  "success": true,
+  "data": { "chatId": "iMessage;+;chat1234567890", "unread": true },
+  "requestId": "req_abc123"
+}
+```
+
+## POST /v1/chats/:chatId/typing — Send a typing indicator
+
+Start or stop showing a typing indicator in the chat. The indicator times out automatically after a short interval if `stop` is not sent.
+
+### Request
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/typing \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "start" }'
+```
+
+### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `status` | string | Yes | `"start"` to show the indicator, `"stop"` to hide it |
+
+### Response (200)
+
+```json
+{
+  "success": true,
+  "data": { "chatId": "iMessage;+;chat1234567890", "typing": true },
+  "requestId": "req_abc123"
+}
+```
+

@@ -142,6 +142,8 @@ Delivery-status events (`message.sent`, `message.delivered`, `message.read`, `me
 | `externalMessageId` | Provider-level GUID |
 | `channel` | `imessage`, `sms`, or `whatsapp` |
 | `readAt` | ISO-8601 timestamp (present on `message.read` only) |
+| `conversation` | Optional object — see [Conversation and sender fragments](#conversation-and-sender-fragments). Present when the originating outbound message was associated with a conversation |
+| `sender` | Optional object — see [Conversation and sender fragments](#conversation-and-sender-fragments) |
 
 > `message.read` fires for iMessage and WhatsApp when the recipient has read receipts enabled on their device. It is a **distinct** event from `message.delivered` — do not collapse them when tracking delivery state. SMS does not emit `message.read`.
 
@@ -214,12 +216,99 @@ Not every event fires for every channel. The matrix below documents which events
 | `attachments[].downloadUrl` | string | Pre-signed URL to download the attachment. Time-limited (1 hour) and self-authenticated — no API key required. Fetch directly via GET request |
 | `attachments[].note` | string \| undefined | Present only on rare failure cases when the attachment metadata reached the platform but the bytes couldn't be persisted. When present, `downloadUrl` will be absent |
 | `otp` | object \| absent | Present when TextBubbles detected a 2FA / verification code in the inbound body (WhatsApp signup, bank OTP, etc.). See [OTP detection](#otp-detection) below |
+| `conversation` | object \| absent | Present when the inbound was attributed to a known chat. See [Conversation and sender fragments](#conversation-and-sender-fragments) |
+| `sender` | object \| absent | Present alongside `conversation`. Resolves the sender to a contact when one matches. See [Conversation and sender fragments](#conversation-and-sender-fragments) |
 
 > **Replying to inbound messages:** always use `messageId` (internal), not `externalMessageId`, when invoking TextBubbles API endpoints. For example, to react to the inbound message above, `POST /v1/messages/msg_xyz789/reactions`.
 
 ### Verification / OTP codes are suppressed
 
 Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes, or other verification codes (e.g. Apple ID, Google, bank account codes) are **not** dispatched as `message.inbound` webhooks or emitted on the `/v1/events` stream. They are also hidden from `GET /v1/messages`.
+
+### Conversation and sender fragments
+
+`message.inbound` and outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include `conversation` and `sender` objects when the message is attributed to a known chat. Top-level `from`/`to` remain populated for backwards compatibility — consumers that only read those keys continue to work.
+
+**1:1 inbound:**
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "message.inbound",
+  "timestamp": "2026-04-21T10:00:00.000Z",
+  "data": {
+    "messageId": "msg_xyz789",
+    "externalMessageId": "AB12CD34-5678-90EF-1234-567890ABCDEF",
+    "from": "+14155551234",
+    "to": "+19876543210",
+    "text": "Hey",
+    "channel": "imessage",
+    "conversation": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "isGroup": false,
+      "providerChatGuid": "iMessage;-;+14155551234",
+      "channel": "imessage"
+    },
+    "sender": {
+      "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10",
+      "handle": "+14155551234"
+    }
+  }
+}
+```
+
+**Group inbound:**
+
+```json
+{
+  "id": "evt_def456",
+  "type": "message.inbound",
+  "timestamp": "2026-04-21T10:05:00.000Z",
+  "data": {
+    "messageId": "msg_abc999",
+    "externalMessageId": "11AA22BB-3344-5566-7788-99AABBCCDDEE",
+    "from": "+14155551234",
+    "to": "+19876543210",
+    "text": "Anyone free Saturday?",
+    "channel": "imessage",
+    "conversation": {
+      "id": "660e8400-e29b-41d4-a716-446655440000",
+      "isGroup": true,
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "groupName": "Family Chat",
+      "participants": [
+        { "handle": "+14155551234", "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10", "role": "member" },
+        { "handle": "+14155559876", "contactId": null, "role": "member" }
+      ]
+    },
+    "sender": {
+      "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10",
+      "handle": "+14155551234"
+    }
+  }
+}
+```
+
+`conversation` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Stable UUID for the conversation. Use this in any future chat-keyed call |
+| `isGroup` | boolean | `true` for group chats, `false` for 1:1 |
+| `providerChatGuid` | string \| null | Provider chat identifier (the same `chatId` returned by `POST /v1/chats/groups` and surfaced on `chat.*` events) |
+| `channel` | string | `imessage`, `sms`, or `whatsapp` |
+| `groupName` | string \| null \| absent | Group display name. Present only when `isGroup` is `true`; null if the group has no name set |
+| `participants` | array \| absent | Active roster. Present only when `isGroup` is `true`. `role` is `member`, `owner`, or `self` (the customer's own instance) |
+
+`sender` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `contactId` | string \| null | UUID of the matching contact when the sender's address resolves to a contact owned by the customer; `null` otherwise |
+| `handle` | string \| null | The sender's address as the provider supplied it (E.164 phone number for SMS/WhatsApp, phone or Apple ID for iMessage) |
+
+Outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include the same `conversation` and `sender` objects when the originating outbound message was associated with a conversation. Status events for legacy outbound messages without a stored conversation omit both fields.
 
 ### Example: WhatsApp quoted reply
 

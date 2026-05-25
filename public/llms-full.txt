@@ -1381,8 +1381,95 @@ Fired when an incoming FaceTime call is detected on an instance.
 | attachments[].downloadUrl | string | Pre-signed URL (1 hour TTL, no API key required) |
 | attachments[].note | string \| undefined | Present only on rare failure cases when the attachment metadata reached the platform but the bytes couldn't be persisted. When present, `downloadUrl` will be absent |
 | otp | object \| absent | Present when TextBubbles detected a 2FA / verification code in the inbound body (WhatsApp signup, bank OTP, etc.). See OTP detection on inbound messages below |
+| conversation | object \| absent | Present when the inbound was attributed to a known chat. See Conversation and sender fragments below |
+| sender | object \| absent | Present alongside `conversation`. Resolves the sender to a contact when one matches |
 
 Replying to inbound messages: always use `messageId` (internal), not `externalMessageId`, when invoking TextBubbles API endpoints. For example, to react to the inbound message above, `POST /v1/messages/msg_xyz789/reactions`.
+
+### Conversation and sender fragments
+
+`message.inbound` and outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include `conversation` and `sender` objects when the message is attributed to a known chat. Top-level `from`/`to` remain populated for backwards compatibility.
+
+1:1 inbound:
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "message.inbound",
+  "timestamp": "2026-04-21T10:00:00.000Z",
+  "data": {
+    "messageId": "msg_xyz789",
+    "externalMessageId": "AB12CD34-5678-90EF-1234-567890ABCDEF",
+    "from": "+14155551234",
+    "to": "+19876543210",
+    "text": "Hey",
+    "channel": "imessage",
+    "conversation": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "isGroup": false,
+      "providerChatGuid": "iMessage;-;+14155551234",
+      "channel": "imessage"
+    },
+    "sender": {
+      "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10",
+      "handle": "+14155551234"
+    }
+  }
+}
+```
+
+Group inbound:
+
+```json
+{
+  "id": "evt_def456",
+  "type": "message.inbound",
+  "timestamp": "2026-04-21T10:05:00.000Z",
+  "data": {
+    "messageId": "msg_abc999",
+    "externalMessageId": "11AA22BB-3344-5566-7788-99AABBCCDDEE",
+    "from": "+14155551234",
+    "to": "+19876543210",
+    "text": "Anyone free Saturday?",
+    "channel": "imessage",
+    "conversation": {
+      "id": "660e8400-e29b-41d4-a716-446655440000",
+      "isGroup": true,
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "groupName": "Family Chat",
+      "participants": [
+        { "handle": "+14155551234", "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10", "role": "member" },
+        { "handle": "+14155559876", "contactId": null, "role": "member" }
+      ]
+    },
+    "sender": {
+      "contactId": "9e1c8f63-1c7d-4a4b-b9a3-2f31b3a72e10",
+      "handle": "+14155551234"
+    }
+  }
+}
+```
+
+`conversation` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | string | Stable UUID for the conversation. Use this in any future chat-keyed call |
+| isGroup | boolean | true for group chats, false for 1:1 |
+| providerChatGuid | string \| null | Provider chat identifier (same `chatId` returned by POST /v1/chats/groups and surfaced on chat.* events) |
+| channel | string | imessage, sms, or whatsapp |
+| groupName | string \| null \| absent | Group display name. Present only when isGroup is true; null if the group has no name set |
+| participants | array \| absent | Active roster. Present only when isGroup is true. `role` is `member`, `owner`, or `self` |
+
+`sender` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| contactId | string \| null | UUID of the matching contact when the sender's address resolves to a contact owned by the customer; null otherwise |
+| handle | string \| null | The sender's address as the provider supplied it (E.164 phone number for SMS/WhatsApp, phone or Apple ID for iMessage) |
+
+Outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include the same `conversation` and `sender` objects when the originating outbound message was associated with a conversation. Status events for legacy outbound messages without a stored conversation omit both fields.
 
 ### Example: WhatsApp quoted reply
 
@@ -1615,6 +1702,177 @@ The event does not include the new photo — retrieve it through the chat resour
 
 ---
 
+# Chats
+
+Manage iMessage group chats and per-chat state. The `chatId` path parameter is the provider-assigned chat GUID returned from POST /v1/chats/groups and surfaced on chat.* webhook events. Persisted chat rows surface a UUID `conversationId` alongside `chatId` on the create and get endpoints; that UUID is what `POST /v1/messages` accepts to send into an existing chat.
+
+## POST /v1/chats/groups
+
+Create a new iMessage group chat.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/groups \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "participants": ["+14155551234", "+14155559876"], "name": "Launch Team" }'
+```
+
+Body:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| participants | string[] | Yes | One or more phone numbers (E.164) or Apple IDs |
+| name | string | No | Initial display name |
+
+Response (201):
+
+```json
+{
+  "success": true,
+  "data": {
+    "chatId": "iMessage;+;chat1234567890",
+    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
+    "participants": ["+14155551234", "+14155559876"],
+    "name": "Launch Team",
+    "createdAt": "2026-04-21T10:00:00.000Z"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| chatId | string | Provider-assigned chat GUID. Use on the other /v1/chats/* endpoints |
+| conversationId | string \| undefined | UUID of the persisted conversation row. Omitted if persistence failed |
+| participants | string[] | Roster as the provider returned it |
+| name | string \| undefined | Display name |
+| createdAt | string | ISO-8601 creation timestamp |
+
+## GET /v1/chats/:chatId
+
+Retrieve metadata for a specific chat.
+
+```bash
+curl https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890 \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+URL-encode `chatId`; it contains `;` characters.
+
+Response (200):
+
+```json
+{
+  "success": true,
+  "data": {
+    "chatId": "iMessage;+;chat1234567890",
+    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
+    "participants": ["+14155551234", "+14155559876"],
+    "name": "Launch Team",
+    "isGroup": true
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| chatId | string | Provider-assigned chat GUID |
+| conversationId | string \| undefined | UUID of the persisted conversation row |
+| participants | string[] | Current roster |
+| name | string \| undefined | Display name (groups only) |
+| isGroup | boolean | true for groups, false for 1:1 |
+
+## PUT /v1/chats/:chatId/name
+
+Rename a group chat. Fires `chat.title.changed`.
+
+```bash
+curl -X PUT https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/name \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Weekend plans" }'
+```
+
+Body: `{ "name": string }` (min length 1).
+
+Response: `{ "success": true, "data": { "chatId": "...", "name": "Weekend plans" } }`.
+
+## POST /v1/chats/:chatId/participants
+
+Add a single participant. Fires `chat.participant.added`.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/participants \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "participant": "+14155550100" }'
+```
+
+Body: `{ "participant": string }` (E.164 phone or Apple ID).
+
+Response: `{ "success": true, "data": { "chatId": "...", "participant": "+14155550100" } }`.
+
+## DELETE /v1/chats/:chatId/participants/:participantId
+
+Remove a participant by phone number or Apple ID. Fires `chat.participant.left`.
+
+```bash
+curl -X DELETE \
+  "https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/participants/+14155550100" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Response: `{ "success": true, "data": { "chatId": "...", "removedParticipant": "+14155550100" } }`.
+
+## POST /v1/chats/:chatId/leave
+
+Leave a group chat.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/leave \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Response: `{ "success": true, "data": { "chatId": "...", "left": true } }`.
+
+## POST /v1/chats/:chatId/read
+
+Mark all messages in the chat as read.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/read \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Response: `{ "success": true, "data": { "chatId": "...", "read": true } }`.
+
+## POST /v1/chats/:chatId/unread
+
+Set the unread indicator on the chat. Requires macOS 13 or later on the sender's instance.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/unread \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Response: `{ "success": true, "data": { "chatId": "...", "unread": true } }`.
+
+## POST /v1/chats/:chatId/typing
+
+Start or stop a typing indicator.
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/typing \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "start" }'
+```
+
+Body: `{ "status": "start" | "stop" }`.
+
+Response: `{ "success": true, "data": { "chatId": "...", "typing": true } }`.
+
+---
+
 # Numbers
 
 List available sender addresses for your account.
@@ -1841,6 +2099,17 @@ Base URL: https://api.textbubbles.com
 
 ## Capabilities
 - GET /v1/capabilities/:phone — Check iMessage/SMS/FaceTime support
+
+## Chats
+- POST /v1/chats/groups — Create a group chat
+- GET /v1/chats/:chatId — Get chat info (participants, name, isGroup)
+- PUT /v1/chats/:chatId/name — Rename a group chat
+- POST /v1/chats/:chatId/participants — Add a participant
+- DELETE /v1/chats/:chatId/participants/:participantId — Remove a participant
+- POST /v1/chats/:chatId/leave — Leave a group chat
+- POST /v1/chats/:chatId/read — Mark a chat as read
+- POST /v1/chats/:chatId/unread — Mark a chat as unread
+- POST /v1/chats/:chatId/typing — Send a typing indicator (start/stop)
 
 ## Numbers
 - GET /v1/numbers — List available sender addresses

@@ -38,6 +38,27 @@ When you catch an internal detail, swap it for the customer-visible concept:
 
 As of 2026-04-25, the customer-facing surface is fully scrubbed. Do not let new PRs reintroduce BlueBubbles / Mac mini / internal-infra references.
 
+## Public commit / PR / comment posture
+
+This repo is **public**. Commit messages, PR titles, PR descriptions, PR/issue comments, and branch names are all world-readable the moment the command runs — draft PRs included. The same "no internal details" rule that applies to the rendered docs applies to **everything written via `git` or `gh` in this repo**.
+
+**Before running any of these, show Lamar the draft and wait for explicit approval:**
+- `git push`
+- `gh pr create` / `gh pr edit`
+- `gh pr comment` / `gh issue comment` / `gh pr review`
+- `gh issue create`
+- Marking a draft PR ready-for-review
+
+**Style contract:**
+- Terse and factual. Bullet lists over prose. Conventional-commits subjects.
+- ✅ What changed + how to verify (e.g. "added FROM_INSTANCE_CANNOT_REACH to error reference; `npm run build` passes").
+- ❌ No narrative, no "we previously had X", no incident/customer/date references.
+- ❌ No internal vendor / service / container / host / queue / library names — same rewrite table as above.
+- ❌ No architectural reasoning, scale/cost/traffic context, roadmap hints.
+- ❌ No `[[wiki-links]]` — those resolve only in Lamar's vault.
+
+The "why" behind a docs change belongs in the matching `api/` PR (private) or the task card in Lamar's vault, never in this repo.
+
 ## Docs-sync contract (from workspace `CLAUDE.md`)
 
 When an API change lands in `api/`, this repo must be updated in the same session. The canonical machine-readable spec is `public/llms-full.txt`; keep it in sync with the MDX pages under `pages/`. `public/llms.txt` has the endpoint summary only.

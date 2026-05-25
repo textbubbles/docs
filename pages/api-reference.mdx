@@ -104,6 +104,20 @@ When the recipient is currently in a Focus mode, the response also includes `foc
 
 > **Tip:** Use this endpoint before calling [`POST /v1/messages`](/messages/send) when you want to branch your application logic based on whether the recipient supports iMessage effects, tapbacks, or FaceTime calls. The `recommendedChannel` field is a convenient default for the `routing.preference` on message send.
 
+## Chats
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/chats/groups` | [Create a group chat](/chats#post-v1chatsgroups--create-a-group-chat) |
+| `GET` | `/v1/chats/:chatId` | [Get chat info](/chats#get-v1chatschatid--get-chat-info) |
+| `PUT` | `/v1/chats/:chatId/name` | [Rename a group chat](/chats#put-v1chatschatidname--rename-a-group-chat) |
+| `POST` | `/v1/chats/:chatId/participants` | [Add a participant](/chats#post-v1chatschatidparticipants--add-a-participant) |
+| `DELETE` | `/v1/chats/:chatId/participants/:participantId` | [Remove a participant](/chats#delete-v1chatschatidparticipantsparticipantid--remove-a-participant) |
+| `POST` | `/v1/chats/:chatId/leave` | [Leave a group chat](/chats#post-v1chatschatidleave--leave-a-group-chat) |
+| `POST` | `/v1/chats/:chatId/read` | [Mark a chat as read](/chats#post-v1chatschatidread--mark-a-chat-as-read) |
+| `POST` | `/v1/chats/:chatId/unread` | [Mark a chat as unread](/chats#post-v1chatschatidunread--mark-a-chat-as-unread) |
+| `POST` | `/v1/chats/:chatId/typing` | [Send a typing indicator](/chats#post-v1chatschatidtyping--send-a-typing-indicator) |
+
 ## Numbers
 
 | Method | Path | Description |
