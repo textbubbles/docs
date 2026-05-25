@@ -1805,6 +1805,7 @@ Every /v1/chats/* response embeds `data.chat`, a single canonical object that al
 | name | string \| null | Group display name. null for 1:1 chats |
 | participants | object[] | Active roster. Each entry: { handle, contactId, role, isPhoneResolved }. `role` is `member`, `owner`, or `self`. `isPhoneResolved` is true when `handle` is a phone-based identifier (E.164 or `<digits>@s.whatsapp.net`) or the `"self"` sentinel; false when only a WhatsApp Linked Device ID (`@lid`) is known |
 
+
 ## POST /v1/chats/groups
 
 Create a new group chat. Defaults to iMessage; pass `channel: "whatsapp"` to create a WhatsApp group.

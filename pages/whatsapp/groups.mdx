@@ -113,6 +113,8 @@ WhatsApp participants follow the canonical [Participants](/chats#participants) s
 - `isPhoneResolved` is `true` for phone JIDs (and the `"self"` sentinel), `false` for `@lid`. Branch on this rather than parsing `handle`.
 - Group admins surface as `role: "owner"` (creator/superadmin) or `role: "member"`. Promotion/demotion events are not currently delivered as `chat.*` webhooks — re-fetch `GET /v1/chats/:chatId` to reconcile.
 
+The same shape appears in `chat.participants[]` on webhook payloads for inbound and outbound events attributed to a WhatsApp group.
+
 ## Webhook idempotency
 
 `chat.title.changed`, `chat.participant.added`, and `chat.participant.left` can fire from two paths: a customer-initiated REST call, and a provider-level state-change event observed shortly after. When both occur for the same logical change, the webhook is emitted **exactly once** within a 60-second deduplication window.
