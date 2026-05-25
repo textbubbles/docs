@@ -1882,6 +1882,12 @@ Or fall back: `["whatsapp", "imessage", "sms"]`. Group sends use `to: "...@g.us"
 - mentions (groups only): yes / yes
 - typing indicators inbound: yes (typing.indicator webhook)
 
+## Outbound media formats
+
+Video preferred (sent as-is): MP4 with H.264 video and AAC audio (or no audio track). Other H.264 containers (.mov, .mkv, etc.) are repackaged into MP4 without re-encoding. Any other format is transcoded to H.264/AAC in MP4 before send; transcoding adds latency proportional to input size and codec.
+
+Voice notes preferred (sent as-is): Opus in OGG. Any other audio format sent with `attachments[].isAudioMessage: true` is transcoded to Opus-in-OGG before send.
+
 ## Reaction type → emoji
 
 | type | emoji |
