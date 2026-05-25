@@ -1,0 +1,128 @@
+# WhatsApp Groups
+
+Create and manage WhatsApp groups through the same [`/v1/chats/*`](/chats) surface used for iMessage. This page documents the WhatsApp-specific behaviors; routing, request shapes, and the general lifecycle are covered on the [Chats](/chats) page.
+
+## Quirks at a glance
+
+- **`name` is required on create.** WhatsApp groups must have a subject set at creation time. `POST /v1/chats/groups` with `channel: "whatsapp"` and no `name` returns `400 NAME_REQUIRED`.
+- **No chat-level read ack.** `POST /v1/chats/:chatId/read` and `POST /v1/chats/:chatId/unread` return `400 CHANNEL_NOT_SUPPORTED` on WhatsApp chats. WhatsApp acknowledges reads per-message.
+- **LID vs PN participants.** A participant may surface with a handle ending in `@lid` (Linked Device ID) when their phone number is not yet known. Use `isPhoneResolved` to branch — do not rely on the format of `handle`.
+- **`chatId` format.** WhatsApp group IDs look like `<id>@g.us`. iMessage IDs look like `iMessage;+;<guid>`. The `conversationId` UUID is the channel-independent identifier.
+
+## Create a group
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/groups \
+  -H "Authorization: Bearer $TB_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel": "whatsapp",
+    "name": "Launch Team",
+    "participants": ["+14155551234", "+14155559876"]
+  }'
+```
+
+Response (201):
+
+```json
+{
+  "success": true,
+  "data": {
+    "chatId": "120363025123456789@g.us",
+    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
+    "channel": "whatsapp",
+    "name": "Launch Team",
+    "participants": [
+      { "handle": "14155551234@s.whatsapp.net", "isPhoneResolved": true, "admin": null },
+      { "handle": "14155559876@s.whatsapp.net", "isPhoneResolved": true, "admin": null }
+    ],
+    "createdAt": "2026-05-25T17:00:00.000Z"
+  }
+}
+```
+
+Optional `from` (E.164) pins the group to that specific instance for its lifetime; without `from`, the customer's default WhatsApp instance is used. Subsequent `/v1/chats/*` calls and sends keyed to the conversation route through the same instance.
+
+## Rename a group
+
+```bash
+curl -X PUT \
+  "https://api.textbubbles.com/v1/chats/120363025123456789@g.us/name" \
+  -H "Authorization: Bearer $TB_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Launch Team — Q3" }'
+```
+
+Fires `chat.title.changed`. See [Webhook idempotency](#webhook-idempotency).
+
+## Add a participant
+
+```bash
+curl -X POST \
+  "https://api.textbubbles.com/v1/chats/120363025123456789@g.us/participants" \
+  -H "Authorization: Bearer $TB_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "participant": "+14155550100" }'
+```
+
+The phone number is normalized to a JID server-side. Fires `chat.participant.added`.
+
+## Remove a participant
+
+```bash
+curl -X DELETE \
+  "https://api.textbubbles.com/v1/chats/120363025123456789@g.us/participants/+14155550100" \
+  -H "Authorization: Bearer $TB_KEY"
+```
+
+URL-encode any `@` in the path segment. Fires `chat.participant.left`.
+
+## Leave a group
+
+```bash
+curl -X POST \
+  "https://api.textbubbles.com/v1/chats/120363025123456789@g.us/leave" \
+  -H "Authorization: Bearer $TB_KEY"
+```
+
+After this call, the customer's instance stops receiving messages from the group.
+
+## Typing indicators
+
+```bash
+curl -X POST \
+  "https://api.textbubbles.com/v1/chats/120363025123456789@g.us/typing" \
+  -H "Authorization: Bearer $TB_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "start" }'
+```
+
+`"start"` maps to the `composing` presence state; `"stop"` maps to `paused`.
+
+## Participant fields
+
+For WhatsApp groups, `participants[]` is an array of objects (not strings):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `handle` | string | Provider identifier. Phone JID (`<digits>@s.whatsapp.net`) when the phone is known, or `<id>@lid` when only the Linked Device ID is known |
+| `isPhoneResolved` | boolean | `true` if `handle` is phone-based. Branch on this rather than parsing the suffix of `handle` |
+| `admin` | string \| null | `"admin"`, `"superadmin"`, or `null` |
+
+The same shape appears in `conversation.participants[]` on webhook payloads for inbound and outbound events attributed to a WhatsApp group.
+
+## Webhook idempotency
+
+`chat.title.changed`, `chat.participant.added`, and `chat.participant.left` can fire from two paths: a customer-initiated REST call, and a provider-level state-change event observed shortly after. When both occur for the same logical change, the webhook is emitted **exactly once** within a 60-second deduplication window.
+
+Implement event handlers to be idempotent on `eventId` either way — duplicates across longer windows or across redelivery attempts are still possible.
+
+## Error codes
+
+| Code | HTTP | Operation | Meaning |
+|------|------|-----------|---------|
+| `NAME_REQUIRED` | 400 | `POST /v1/chats/groups` (`channel: "whatsapp"`) | `name` is missing or empty |
+| `CHANNEL_NOT_SUPPORTED` | 400 | `POST /v1/chats/:chatId/read`, `POST /v1/chats/:chatId/unread` | Operation is not available on a WhatsApp chat |
+| `FROM_INSTANCE_CANNOT_REACH` | 400 | Any `/v1/chats/*` write | The supplied `from` does not match the instance the conversation is pinned to |
+| `CONVERSATION_NOT_FOUND` | 404 | Any `/v1/chats/:chatId/*` | `chatId` does not match a conversation for this customer |
+| `WHATSAPP_NOT_CONNECTED` | 400 | Any `/v1/chats/*` on a WhatsApp chat | The pinned WhatsApp instance is not currently paired |

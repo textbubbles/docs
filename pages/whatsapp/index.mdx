@@ -15,7 +15,8 @@ TextBubbles supports **WhatsApp** as a first-class send/receive channel alongsid
 | Replies (quoted) via `replyTo` | ✅ | ✅ |
 | Mentions in groups | ✅ | ✅ |
 | Send to existing groups via `to: "...@g.us"` | ✅ | ✅ |
-| Typing indicators | — | ✅ via `typing.indicator` webhook |
+| Group create / rename / add / remove / leave via [`/v1/chats/*`](/whatsapp/groups) | ✅ | — |
+| Typing indicators | ✅ via [`POST /v1/chats/:chatId/typing`](/chats#post-v1chatschatidtyping--send-a-typing-indicator) | ✅ via `typing.indicator` webhook |
 
 ## Pairing a number
 
@@ -177,7 +178,7 @@ Inbound media (photos, videos, voice notes, documents, stickers) is surfaced as 
 ## Limitations
 
 - **One WhatsApp account per TextBubbles number.** Pairing uses the WhatsApp "Linked Devices" slot; revoking the link from the customer's phone disconnects the session and requires re-pairing.
-- **Group operations.** Sending into existing groups (and replying / mentioning within them) is supported; creating groups or managing membership through the API is not.
+- **Group operations.** Create, rename, add/remove participants, and leave groups through the [`/v1/chats/*`](/chats) endpoints. See [WhatsApp Groups](/whatsapp/groups) for WhatsApp-specific quirks (`name` required on create, no chat-level read ack, LID-only participants).
 - **iMessage-specific features** (`effect`, `messageType: "carousel"`) are silently dropped on a WhatsApp-only routing.
 
 ## Errors

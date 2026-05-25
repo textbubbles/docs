@@ -48,14 +48,16 @@ Every webhook event follows this structure:
 
 ## Chat Events
 
-Fired when a contact performs a chat-state action — currently sourced from iMessage group-chat updates. Customers typically use these to keep a local mirror of chat metadata in sync.
+Fired when a contact performs a chat-state action on an iMessage or WhatsApp group chat. Customers typically use these to keep a local mirror of chat metadata in sync.
 
 | Event | Description |
 |-------|-------------|
 | `chat.participant.added` | A participant was added to a group chat |
 | `chat.participant.left` | A participant was removed from (or left) a group chat |
 | `chat.title.changed` | A group chat's title was set or changed |
-| `chat.photo.changed` | A group chat's photo was updated |
+| `chat.photo.changed` | A group chat's photo was updated (iMessage only) |
+
+> **Single-emit dedup window.** When a customer initiates a rename / add / remove via `POST /v1/chats/:chatId/name`, `POST /v1/chats/:chatId/participants`, or `DELETE /v1/chats/:chatId/participants/:participantId` **and** the upstream provider also fires its own state-change event, the corresponding webhook (`chat.title.changed` / `chat.participant.added` / `chat.participant.left`) is emitted exactly once — duplicates within a 60-second window are suppressed. Implement your handler to be idempotent on `eventId` either way.
 
 ## Scheduled Message Events
 
@@ -299,7 +301,7 @@ Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes
 | `providerChatGuid` | string \| null | Provider chat identifier (the same `chatId` returned by `POST /v1/chats/groups` and surfaced on `chat.*` events) |
 | `channel` | string | `imessage`, `sms`, or `whatsapp` |
 | `groupName` | string \| null \| absent | Group display name. Present only when `isGroup` is `true`; null if the group has no name set |
-| `participants` | array \| absent | Active roster. Present only when `isGroup` is `true`. `role` is `member`, `owner`, or `self` (the customer's own instance) |
+| `participants` | array \| absent | Active roster. Present only when `isGroup` is `true`. Each entry carries `handle`, `contactId`, `role`, and — on WhatsApp groups — `isPhoneResolved`. `role` is `member`, `owner`, or `self` (the customer's own instance). `isPhoneResolved` is `true` when `handle` is a phone-based identifier and `false` when only a Linked Device ID is known; treat this as the source of truth on whether the phone is resolved, rather than parsing `handle` |
 
 `sender` fields:
 
@@ -494,9 +496,12 @@ All four chat events share the same envelope. Each carries `externalMessageId` (
 
 | Field | Description |
 |-------|-------------|
-| `chatId` | Provider chat identifier |
-| `participant` | Contact added to (or removed from) the chat |
+| `chatId` | Provider chat identifier (`iMessage;+;<guid>` or `<id>@g.us`) |
+| `participant` | Contact added to (or removed from) the chat. On WhatsApp, a JID; may be `<id>@lid` when the phone is not yet resolved |
 | `actor` | Contact who performed the action |
+| `channel` | `"imessage"` or `"whatsapp"` |
+
+> When the change is initiated by a customer via `/v1/chats/:chatId/participants` AND the provider fires its own event, the webhook is emitted exactly once (60-second dedup window). Implement your handler to be idempotent on `eventId` either way.
 
 ### `chat.title.changed`
 
@@ -520,6 +525,9 @@ All four chat events share the same envelope. Each carries `externalMessageId` (
 |-------|-------------|
 | `title` | The new chat title |
 | `actor` | Contact who changed the title |
+| `channel` | `"imessage"` or `"whatsapp"` |
+
+> When the rename is initiated by a customer via `PUT /v1/chats/:chatId/name` AND the provider fires its own event, the webhook is emitted exactly once (60-second dedup window). Implement your handler to be idempotent on `eventId` either way.
 
 ### `chat.photo.changed`
 

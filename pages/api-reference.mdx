@@ -250,9 +250,10 @@ An instance can have multiple warnings at the same time. Warnings are cleared au
 | `NO_DEFAULT_ADDRESS` | 400 | No authorized address configured for customer |
 | `VALIDATION_ERROR` | 400 | Request body failed validation |
 | `INVALID_PHONE_NUMBER` | 400 | Phone number not in E.164 format |
+| `NAME_REQUIRED` | 400 | `POST /v1/chats/groups` with `channel: "whatsapp"` and no `name` |
 | `NOT_FOUND` | 404 | Resource not found |
 | `REPLY_NOT_FOUND` | 404 | Reply target message not found |
-| `CHANNEL_NOT_SUPPORTED` | 400 | Operation not supported on channel |
+| `CHANNEL_NOT_SUPPORTED` | 400 | Operation not supported on the conversation's channel (e.g. `/v1/chats/:chatId/read` or `/unread` on a WhatsApp chat) |
 | `NO_CHANNEL_AVAILABLE` | 400 | Recipient not reachable |
 | `FROM_INSTANCE_CANNOT_REACH` | 400 | The specified `from` address cannot reach the recipient on any of the requested channels, or — for `chatId` sends — does not match the instance the chat is pinned to |
 | `INVALID_REQUEST` | 400 | Request shape is invalid. On `POST /v1/messages`: `to` and `chatId` were both supplied, or neither was supplied (exactly one is required) |

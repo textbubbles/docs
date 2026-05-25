@@ -30,7 +30,8 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 - [Scheduled Messages](https://docs.textbubbles.com/messages/scheduled): Schedule messages up to 30 days ahead
 - [Tapback Reactions](https://docs.textbubbles.com/messages/reactions): POST /v1/messages/:id/reactions
 - [Message Effects](https://docs.textbubbles.com/messages/effects): iMessage effects (confetti, fireworks, etc.)
-- [Chats](https://docs.textbubbles.com/chats): /v1/chats/* — create groups, rename, add/remove participants, read/unread, typing
+- [Chats](https://docs.textbubbles.com/chats): /v1/chats/* — create groups (iMessage or WhatsApp via `channel`), rename, add/remove participants, read/unread (iMessage only), typing
+- [WhatsApp Groups](https://docs.textbubbles.com/whatsapp/groups): WhatsApp-specific quirks for /v1/chats/* — name required on create, no chat-level read ack, LID vs PN participants
 - [Webhook Setup](https://docs.textbubbles.com/webhooks/setup): Configure webhook URL, signature verification
 - [Webhook Events](https://docs.textbubbles.com/webhooks/events): All event types and payload schemas (incl. chat.* events and conversation/sender fragments)
 - [Realtime Events (SSE)](https://docs.textbubbles.com/webhooks/events#realtime-sse): GET /v1/events — live event stream without hosting a webhook endpoint
@@ -58,14 +59,18 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 - GET /v1/capabilities/:phone — Check iMessage/SMS/FaceTime support
 
 ### Chats
-- POST /v1/chats/groups — Create a group chat (returns chatId + conversationId)
+- POST /v1/chats/groups — Create a group chat. Pass `channel: "whatsapp"` for a WhatsApp group (name is required, 400 NAME_REQUIRED otherwise). Defaults to iMessage. Returns chatId (provider id) + conversationId (UUID)
 - GET /v1/chats/:chatId — Get chat info
-- PUT /v1/chats/:chatId/name — Rename a group chat
-- POST /v1/chats/:chatId/participants — Add a participant
-- DELETE /v1/chats/:chatId/participants/:participantId — Remove a participant
-- POST /v1/chats/:chatId/leave — Leave a group chat
-- POST /v1/chats/:chatId/read | unread — Read state
-- POST /v1/chats/:chatId/typing — Typing indicator (start/stop)
+- PUT /v1/chats/:chatId/name — Rename a group chat (iMessage + WhatsApp)
+- POST /v1/chats/:chatId/participants — Add a participant (iMessage + WhatsApp)
+- DELETE /v1/chats/:chatId/participants/:participantId — Remove a participant (iMessage + WhatsApp)
+- POST /v1/chats/:chatId/leave — Leave a group chat (iMessage + WhatsApp)
+- POST /v1/chats/:chatId/read | unread — iMessage only; 400 CHANNEL_NOT_SUPPORTED on WhatsApp
+- POST /v1/chats/:chatId/typing — Typing indicator (start/stop; iMessage + WhatsApp)
+
+### Error codes (selected)
+- NAME_REQUIRED (400) — POST /v1/chats/groups with channel: "whatsapp" and no name
+- CHANNEL_NOT_SUPPORTED (400) — operation not available on the conversation's channel
 
 ### Webhook Events (selected)
 - message.inbound, message.sent, message.delivered, message.read, message.failed — include `conversation` and `sender` fragments when attributed to a known chat
