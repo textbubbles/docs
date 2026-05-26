@@ -1796,10 +1796,14 @@ Response (201) — iMessage:
 {
   "success": true,
   "data": {
-    "chatId": "iMessage;+;chat1234567890",
-    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
-    "participants": ["+14155551234", "+14155559876"],
-    "name": "Launch Team",
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Launch Team",
+      "participants": ["+14155551234", "+14155559876"]
+    },
     "createdAt": "2026-04-21T10:00:00.000Z"
   }
 }
@@ -1811,25 +1815,32 @@ Response (201) — WhatsApp:
 {
   "success": true,
   "data": {
-    "chatId": "120363025123456789@g.us",
-    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
-    "channel": "whatsapp",
-    "participants": [
-      { "handle": "14155551234@s.whatsapp.net", "isPhoneResolved": true, "admin": null }
-    ],
-    "name": "Launch Team",
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "120363025123456789@g.us",
+      "channel": "whatsapp",
+      "isGroup": true,
+      "name": "Launch Team",
+      "participants": [
+        { "handle": "14155551234@s.whatsapp.net", "isPhoneResolved": true, "admin": null }
+      ]
+    },
     "createdAt": "2026-05-25T17:00:00.000Z"
   }
 }
 ```
 
+Naming note: `chatId` means two related things. In a path parameter (`/v1/chats/:chatId/...`) and on `chat.*` webhook events it's the provider chat identifier (`iMessage;+;<guid>` or `<id>@g.us`). In a response body's `chat` fragment it's the UUID of the persisted conversation row; the provider identifier is exposed as `providerChatGuid`. The API accepts either form as the `:chatId` path parameter; the UUID is what to use as `conversationId` for sends via `POST /v1/messages`.
+
 | Field | Type | Description |
 |-------|------|-------------|
-| chatId | string | Provider chat identifier. iMessage: `iMessage;+;<guid>`. WhatsApp: `<id>@g.us` |
-| conversationId | string \| undefined | UUID of the persisted conversation row. Channel-independent. Omitted if persistence failed |
-| channel | string | "imessage" or "whatsapp". Present on WhatsApp responses |
-| participants | string[] \| object[] | iMessage: plain strings. WhatsApp: `{ handle, isPhoneResolved, admin }` |
-| name | string \| undefined | Display name |
+| chat | object | Chat fragment (fields below) |
+| chat.chatId | string | UUID of the persisted conversation row. Channel-independent. Use as the `conversationId` for sends via `POST /v1/messages` |
+| chat.providerChatGuid | string \| null | Provider chat identifier. iMessage: `iMessage;+;<guid>`. WhatsApp: `<id>@g.us`. `null` in the fallback shape when persistence failed |
+| chat.channel | string | "imessage", "sms", or "whatsapp" |
+| chat.isGroup | boolean | true for groups, false for 1:1 |
+| chat.name | string \| null | Display name (groups only) |
+| chat.participants | string[] \| object[] | iMessage: plain strings. WhatsApp: `{ handle, isPhoneResolved, admin }` |
 | createdAt | string | ISO-8601 creation timestamp |
 
 ## GET /v1/chats/:chatId
@@ -1849,23 +1860,27 @@ Response (200):
 {
   "success": true,
   "data": {
-    "chatId": "iMessage;+;chat1234567890",
-    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
-    "participants": ["+14155551234", "+14155559876"],
-    "name": "Launch Team",
-    "isGroup": true
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Launch Team",
+      "participants": ["+14155551234", "+14155559876"]
+    }
   }
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| chatId | string | Provider chat identifier (`iMessage;+;<guid>` or `<id>@g.us`) |
-| conversationId | string \| undefined | UUID of the persisted conversation row |
-| channel | string | "imessage" or "whatsapp" (present on WhatsApp responses) |
-| participants | string[] \| object[] | iMessage: plain strings. WhatsApp: `{ handle, isPhoneResolved, admin }` |
-| name | string \| undefined | Display name (groups only) |
-| isGroup | boolean | true for groups, false for 1:1 |
+| chat | object | Chat fragment (fields below) |
+| chat.chatId | string | UUID of the persisted conversation row |
+| chat.providerChatGuid | string \| null | Provider chat identifier (`iMessage;+;<guid>` or `<id>@g.us`); `null` for the fallback shape |
+| chat.channel | string | "imessage", "sms", or "whatsapp" |
+| chat.isGroup | boolean | true for groups, false for 1:1 |
+| chat.name | string \| null | Display name (groups only) |
+| chat.participants | string[] \| object[] | iMessage: plain strings. WhatsApp: `{ handle, isPhoneResolved, admin }` |
 
 ## PUT /v1/chats/:chatId/name
 
@@ -1880,7 +1895,7 @@ curl -X PUT https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890
 
 Body: `{ "name": string }` (min length 1).
 
-Response: `{ "success": true, "data": { "chatId": "...", "name": "Weekend plans" } }`.
+Response: `{ "success": true, "data": { "chat": ChatFragment, "name": "Weekend plans" } }`.
 
 ## POST /v1/chats/:chatId/participants
 
@@ -1895,7 +1910,7 @@ curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat123456789
 
 Body: `{ "participant": string }` (E.164 phone or Apple ID).
 
-Response: `{ "success": true, "data": { "chatId": "...", "participant": "+14155550100" } }`.
+Response: `{ "success": true, "data": { "chat": ChatFragment, "participant": "+14155550100", "status": "200" } }`.
 
 ## DELETE /v1/chats/:chatId/participants/:participantId
 
@@ -1907,7 +1922,7 @@ curl -X DELETE \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-Response: `{ "success": true, "data": { "chatId": "...", "removedParticipant": "+14155550100" } }`.
+Response: `{ "success": true, "data": { "chat": ChatFragment, "removedParticipant": "+14155550100", "status": "200" } }`.
 
 ## POST /v1/chats/:chatId/leave
 

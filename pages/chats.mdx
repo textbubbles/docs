@@ -2,9 +2,9 @@
 
 Manage iMessage and WhatsApp group chats and per-chat state via the `/v1/chats/*` endpoints.
 
-> All endpoints require a Bearer token (`Authorization: Bearer tb_xxxxx`). The `chatId` path parameter is the provider-assigned chat identifier returned from `POST /v1/chats/groups` and surfaced on `chat.*` webhook events. Chats are also persisted server-side as conversations; `conversationId` (a UUID) is returned alongside `chatId` on the create and get endpoints, and is the stable value used for sends keyed to an existing chat regardless of channel.
+> All endpoints require a Bearer token (`Authorization: Bearer tb_xxxxx`).
 >
-> **`chatId` format differs per channel.** iMessage chats use `iMessage;+;<guid>`; WhatsApp groups use `<id>@g.us`. The `conversationId` UUID is the same shape on both.
+> **`chatId` means two related things.** In a path parameter (`/v1/chats/:chatId/...`) and on `chat.*` webhook events it's the **provider chat identifier** — `iMessage;+;<guid>` for iMessage, `<id>@g.us` for WhatsApp groups. In a response body's `chat` fragment it's the **stable UUID** of the persisted conversation row; the provider identifier is exposed as `providerChatGuid` alongside it. The API accepts either form as the `:chatId` path parameter, and the UUID is the value to use for sends keyed to an existing chat via `POST /v1/messages`.
 >
 > **Channel asymmetry.** `POST /:chatId/read` and `POST /:chatId/unread` are iMessage-only — they return `400 CHANNEL_NOT_SUPPORTED` on WhatsApp chats. Every other route works on both channels. See the [WhatsApp Groups](/whatsapp/groups) page for WhatsApp-specific quirks.
 
@@ -39,11 +39,14 @@ curl -X POST https://api.textbubbles.com/v1/chats/groups \
 {
   "success": true,
   "data": {
-    "chatId": "iMessage;+;chat1234567890",
-    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
-    "channel": "imessage",
-    "participants": ["+14155551234", "+14155559876"],
-    "name": "Launch Team",
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Launch Team",
+      "participants": ["+14155551234", "+14155559876"]
+    },
     "createdAt": "2026-04-21T10:00:00.000Z"
   },
   "requestId": "req_abc123"
@@ -52,11 +55,13 @@ curl -X POST https://api.textbubbles.com/v1/chats/groups \
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `chatId` | string | Provider chat identifier. **iMessage:** `iMessage;+;<guid>`. **WhatsApp:** `<id>@g.us` |
-| `conversationId` | string \| undefined | UUID of the persisted conversation row. Stable across channels. Omitted if persistence failed (the chat itself still exists) |
-| `channel` | string | `"imessage"` or `"whatsapp"`. Present on WhatsApp responses; omitted on legacy iMessage responses |
-| `participants` | string[] \| object[] | **iMessage:** array of phone/Apple ID strings. **WhatsApp:** array of `{ handle, isPhoneResolved, admin }` — see [WhatsApp Groups](/whatsapp/groups#participant-fields) |
-| `name` | string \| undefined | Display name (echoed `name` from the request, or what the provider stored) |
+| `chat` | object | Chat fragment (fields below) |
+| `chat.chatId` | string | UUID of the persisted conversation row. Stable across channels. Use this as the `conversationId` for sends via `POST /v1/messages` |
+| `chat.providerChatGuid` | string \| null | Provider chat identifier. **iMessage:** `iMessage;+;<guid>`. **WhatsApp:** `<id>@g.us`. `null` in the rare fallback shape returned when the chat succeeded upstream but the platform's own persistence tripped up |
+| `chat.channel` | string | `"imessage"`, `"sms"`, or `"whatsapp"` |
+| `chat.isGroup` | boolean | `true` for groups, `false` for 1:1 chats |
+| `chat.name` | string \| null | Display name (groups only) |
+| `chat.participants` | string[] \| object[] | **iMessage:** array of phone/Apple ID strings. **WhatsApp:** array of `{ handle, isPhoneResolved, admin }` — see [WhatsApp Groups](/whatsapp/groups#participant-fields) |
 | `createdAt` | string | ISO-8601 creation timestamp |
 
 ### Creating a WhatsApp group
@@ -77,7 +82,7 @@ Notes for WhatsApp:
 - `name` is required by the WhatsApp protocol — omitting it returns `400 NAME_REQUIRED`.
 - `participants[]` accepts E.164 phone numbers; the API normalizes each to a JID server-side.
 - Without `from`, the group is pinned to the customer's default WhatsApp instance for the lifetime of the conversation. With `from`, the supplied instance is used.
-- Response `chatId` is the WhatsApp group JID (`<id>@g.us`). Use it on the other `/v1/chats/*` endpoints. The `conversationId` UUID is the stable identifier for sends via `POST /v1/messages`.
+- The response's `chat.providerChatGuid` is the WhatsApp group JID (`<id>@g.us`). Use it as the `:chatId` path parameter on the other `/v1/chats/*` endpoints. The `chat.chatId` UUID is the stable identifier for sends via `POST /v1/messages`.
 
 ## GET /v1/chats/:chatId — Get chat info
 
@@ -98,11 +103,14 @@ URL-encode the `chatId` — it contains `;` characters that some HTTP clients tr
 {
   "success": true,
   "data": {
-    "chatId": "iMessage;+;chat1234567890",
-    "conversationId": "550e8400-e29b-41d4-a716-446655440000",
-    "participants": ["+14155551234", "+14155559876"],
-    "name": "Launch Team",
-    "isGroup": true
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Launch Team",
+      "participants": ["+14155551234", "+14155559876"]
+    }
   },
   "requestId": "req_abc123"
 }
@@ -110,12 +118,13 @@ URL-encode the `chatId` — it contains `;` characters that some HTTP clients tr
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `chatId` | string | Provider chat identifier (`iMessage;+;<guid>` or `<id>@g.us`) |
-| `conversationId` | string \| undefined | UUID of the persisted conversation row |
-| `channel` | string | `"imessage"` or `"whatsapp"`. Present on WhatsApp responses |
-| `participants` | string[] \| object[] | Current roster. **iMessage:** plain strings. **WhatsApp:** `{ handle, isPhoneResolved, admin }` — see [Participants](#participants) below |
-| `name` | string \| undefined | Display name (groups only) |
-| `isGroup` | boolean | `true` for groups, `false` for 1:1 chats |
+| `chat` | object | Chat fragment (fields below) |
+| `chat.chatId` | string | UUID of the persisted conversation row |
+| `chat.providerChatGuid` | string \| null | Provider chat identifier (`iMessage;+;<guid>` or `<id>@g.us`); `null` for the fallback shape |
+| `chat.channel` | string | `"imessage"`, `"sms"`, or `"whatsapp"` |
+| `chat.isGroup` | boolean | `true` for groups, `false` for 1:1 chats |
+| `chat.name` | string \| null | Display name (groups only) |
+| `chat.participants` | string[] \| object[] | Current roster. **iMessage:** plain strings. **WhatsApp:** `{ handle, isPhoneResolved, admin }` — see [Participants](#participants) below |
 
 ## PUT /v1/chats/:chatId/name — Rename a group chat
 
@@ -141,7 +150,17 @@ curl -X PUT https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890
 ```json
 {
   "success": true,
-  "data": { "chatId": "iMessage;+;chat1234567890", "name": "Weekend plans" },
+  "data": {
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Weekend plans",
+      "participants": [...]
+    },
+    "name": "Weekend plans"
+  },
   "requestId": "req_abc123"
 }
 ```
@@ -172,7 +191,18 @@ curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat123456789
 ```json
 {
   "success": true,
-  "data": { "chatId": "iMessage;+;chat1234567890", "participant": "+14155550100" },
+  "data": {
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Launch Team",
+      "participants": [...]
+    },
+    "participant": "+14155550100",
+    "status": "200"
+  },
   "requestId": "req_abc123"
 }
 ```
@@ -197,8 +227,16 @@ curl -X DELETE \
 {
   "success": true,
   "data": {
-    "chatId": "iMessage;+;chat1234567890",
-    "removedParticipant": "+14155550100"
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Launch Team",
+      "participants": [...]
+    },
+    "removedParticipant": "+14155550100",
+    "status": "200"
   },
   "requestId": "req_abc123"
 }
