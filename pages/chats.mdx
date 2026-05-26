@@ -227,6 +227,90 @@ curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat123456789
 }
 ```
 
+## POST /v1/chats/:chatId/icon — Set the group chat icon
+
+Set or replace the group chat icon. Accepts either a publicly downloadable `imageUrl` or a base64-encoded `imageBase64` payload. Group chats only.
+
+### Request
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/icon \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "imageUrl": "https://example.com/team-photo.jpg",
+    "mimeType": "image/jpeg"
+  }'
+```
+
+### Request Body
+
+Exactly one of `imageUrl` or `imageBase64` must be supplied.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `imageUrl` | string | One of | Publicly downloadable URL of the new icon |
+| `imageBase64` | string | One of | Base64-encoded image bytes |
+| `mimeType` | string | No | MIME type hint (e.g. `image/png`). Inferred from the upstream `Content-Type` when omitted |
+| `filename` | string | No | Optional filename hint |
+
+### Response (200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Family Chat",
+      "participants": []
+    },
+    "photoUrl": "https://api.textbubbles.com/v1/attachments/<signed-token>"
+  },
+  "requestId": "req_abc123"
+}
+```
+
+`photoUrl` is `null` when the icon was sent to the provider but the persisted copy could not be captured (e.g. transient storage failure). The change still goes through and the `chat.photo.changed` webhook is emitted; you can `GET /v1/chats/:chatId` again later to retrieve a fresh signed URL.
+
+Emits `chat.photo.changed`.
+
+## DELETE /v1/chats/:chatId/icon — Remove the group chat icon
+
+Remove the group chat icon. Group chats only.
+
+### Request
+
+```bash
+curl -X DELETE https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/icon \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response (200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "chat": {
+      "chatId": "550e8400-e29b-41d4-a716-446655440000",
+      "providerChatGuid": "iMessage;+;chat1234567890",
+      "channel": "imessage",
+      "isGroup": true,
+      "name": "Family Chat",
+      "participants": []
+    },
+    "photoUrl": null
+  },
+  "requestId": "req_abc123"
+}
+```
+
+Emits `chat.photo.changed` with `photoUrl: null`.
+
 ## POST /v1/chats/:chatId/read — Mark a chat as read
 
 Mark all messages in the chat as read. Sends read receipts to the other participants if receipts are enabled.
