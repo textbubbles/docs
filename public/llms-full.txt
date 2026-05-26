@@ -630,7 +630,7 @@ curl -X POST https://api.textbubbles.com/v1/chats/groups \
   -d '{ "participants": ["+14155551234", "+14155559876"], "name": "Launch Team" }'
 ```
 
-Response data: `{ chatId, conversationId, participants, name, createdAt }`. Use `conversationId` as the `chatId` field value on `POST /v1/messages`; use `chatId` (provider GUID) on chat-level endpoints (rename, add/remove participant, leave).
+Response data: `{ chat: ChatFragment, createdAt }`. `chat.chatId` is the UUID of the persisted conversation row — pass that value as the `chatId` field on `POST /v1/messages` to send into the chat. `chat.providerChatGuid` is the provider identifier — use that as the `:chatId` path parameter on chat-level endpoints (rename, add/remove participant, leave, icon).
 
 ## Full Request Schema — POST /v1/messages
 
@@ -1757,7 +1757,7 @@ When the photo change is initiated by a customer via POST /v1/chats/:chatId/icon
 
 # Chats
 
-Manage iMessage and WhatsApp group chats and per-chat state. The `chatId` path parameter is the provider chat identifier returned from POST /v1/chats/groups and surfaced on chat.* webhook events — `iMessage;+;<guid>` for iMessage chats, `<id>@g.us` for WhatsApp groups. Persisted chat rows surface a channel-independent UUID `conversationId` alongside `chatId` on the create and get endpoints; that UUID is what `POST /v1/messages` accepts to send into an existing chat.
+Manage iMessage and WhatsApp group chats and per-chat state. `chatId` means two related things: in the `:chatId` path parameter and on chat.* webhook events it's the provider chat identifier (`iMessage;+;<guid>` or `<id>@g.us`); in a response body's `chat` fragment, and as the `chatId` field on `POST /v1/messages`, it's the UUID of the persisted conversation row. The provider identifier is exposed as `providerChatGuid` alongside `chatId` in the chat fragment. The API accepts either form as the `:chatId` path parameter on /v1/chats/* routes; on POST /v1/messages pass the UUID.
 
 Channel asymmetry: POST /v1/chats/:chatId/read and POST /v1/chats/:chatId/unread are iMessage-only. They return 400 CHANNEL_NOT_SUPPORTED on WhatsApp chats — WhatsApp has no chat-level read ack. All other routes (GET, PUT /name, POST/DELETE /participants, POST /leave, POST /typing) work on both channels.
 
@@ -1830,12 +1830,12 @@ Response (201) — WhatsApp:
 }
 ```
 
-Naming note: `chatId` means two related things. In a path parameter (`/v1/chats/:chatId/...`) and on `chat.*` webhook events it's the provider chat identifier (`iMessage;+;<guid>` or `<id>@g.us`). In a response body's `chat` fragment it's the UUID of the persisted conversation row; the provider identifier is exposed as `providerChatGuid`. The API accepts either form as the `:chatId` path parameter; the UUID is what to use as `conversationId` for sends via `POST /v1/messages`.
+Naming note: `chatId` means two related things. In a path parameter (`/v1/chats/:chatId/...`) and on `chat.*` webhook events it's the provider chat identifier (`iMessage;+;<guid>` or `<id>@g.us`). In a response body's `chat` fragment, and as the `chatId` field on `POST /v1/messages`, it's the UUID of the persisted conversation row; the provider identifier is exposed as `providerChatGuid`. The API accepts either form as the `:chatId` path parameter on /v1/chats/* routes; on POST /v1/messages pass the UUID.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | chat | object | Chat fragment (fields below) |
-| chat.chatId | string | UUID of the persisted conversation row. Channel-independent. Use as the `conversationId` for sends via `POST /v1/messages` |
+| chat.chatId | string | UUID of the persisted conversation row. Channel-independent. Pass this value as the `chatId` field on `POST /v1/messages` to send into the chat |
 | chat.providerChatGuid | string \| null | Provider chat identifier. iMessage: `iMessage;+;<guid>`. WhatsApp: `<id>@g.us`. `null` in the fallback shape when persistence failed |
 | chat.channel | string | "imessage", "sms", or "whatsapp" |
 | chat.isGroup | boolean | true for groups, false for 1:1 |

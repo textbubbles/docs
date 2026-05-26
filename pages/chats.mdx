@@ -4,7 +4,7 @@ Manage iMessage and WhatsApp group chats and per-chat state via the `/v1/chats/*
 
 > All endpoints require a Bearer token (`Authorization: Bearer tb_xxxxx`).
 >
-> **`chatId` means two related things.** In a path parameter (`/v1/chats/:chatId/...`) and on `chat.*` webhook events it's the **provider chat identifier** — `iMessage;+;<guid>` for iMessage, `<id>@g.us` for WhatsApp groups. In a response body's `chat` fragment it's the **stable UUID** of the persisted conversation row; the provider identifier is exposed as `providerChatGuid` alongside it. The API accepts either form as the `:chatId` path parameter, and the UUID is the value to use for sends keyed to an existing chat via `POST /v1/messages`.
+> **`chatId` means two related things.** In a path parameter (`/v1/chats/:chatId/...`) and on `chat.*` webhook events it's the **provider chat identifier** — `iMessage;+;<guid>` for iMessage, `<id>@g.us` for WhatsApp groups. In a response body's `chat` fragment, and as the `chatId` field on `POST /v1/messages`, it's the **stable UUID** of the persisted conversation row; the provider identifier is exposed as `providerChatGuid` alongside it. The API accepts either form as the `:chatId` path parameter on `/v1/chats/*` routes; on `POST /v1/messages` pass the UUID to send into an existing chat.
 >
 > **Channel asymmetry.** `POST /:chatId/read` and `POST /:chatId/unread` are iMessage-only — they return `400 CHANNEL_NOT_SUPPORTED` on WhatsApp chats. Every other route works on both channels. See the [WhatsApp Groups](/whatsapp/groups) page for WhatsApp-specific quirks.
 
@@ -56,7 +56,7 @@ curl -X POST https://api.textbubbles.com/v1/chats/groups \
 | Field | Type | Description |
 |-------|------|-------------|
 | `chat` | object | Chat fragment (fields below) |
-| `chat.chatId` | string | UUID of the persisted conversation row. Stable across channels. Use this as the `conversationId` for sends via `POST /v1/messages` |
+| `chat.chatId` | string | UUID of the persisted conversation row. Stable across channels. Pass this value as the `chatId` field on `POST /v1/messages` to send into the chat |
 | `chat.providerChatGuid` | string \| null | Provider chat identifier. **iMessage:** `iMessage;+;<guid>`. **WhatsApp:** `<id>@g.us`. `null` in the rare fallback shape returned when the chat succeeded upstream but the platform's own persistence tripped up |
 | `chat.channel` | string | `"imessage"`, `"sms"`, or `"whatsapp"` |
 | `chat.isGroup` | boolean | `true` for groups, `false` for 1:1 chats |
@@ -82,7 +82,7 @@ Notes for WhatsApp:
 - `name` is required by the WhatsApp protocol — omitting it returns `400 NAME_REQUIRED`.
 - `participants[]` accepts E.164 phone numbers; the API normalizes each to a JID server-side.
 - Without `from`, the group is pinned to the customer's default WhatsApp instance for the lifetime of the conversation. With `from`, the supplied instance is used.
-- The response's `chat.providerChatGuid` is the WhatsApp group JID (`<id>@g.us`). Use it as the `:chatId` path parameter on the other `/v1/chats/*` endpoints. The `chat.chatId` UUID is the stable identifier for sends via `POST /v1/messages`.
+- The response's `chat.providerChatGuid` is the WhatsApp group JID (`<id>@g.us`). Use it as the `:chatId` path parameter on the other `/v1/chats/*` endpoints. The `chat.chatId` UUID is what to pass as the `chatId` field on `POST /v1/messages`.
 
 ## GET /v1/chats/:chatId — Get chat info
 
