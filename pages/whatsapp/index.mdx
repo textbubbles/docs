@@ -160,6 +160,25 @@ Preferred (sent as-is): **Opus in OGG**.
 
 Any other audio format sent with `attachments[].isAudioMessage: true` is transcoded to Opus-in-OGG before send.
 
+### Disappearing messages
+
+WhatsApp lets a recipient enable disappearing messages on a chat — either explicitly per-chat, or via WhatsApp's per-user default for new chats. When a chat has disappearing messages enabled, outbound messages must carry the matching expiration or the recipient sees:
+
+> *This message will not disappear from the chat. The sender may be on an old version of WhatsApp.*
+
+TextBubbles tracks the recipient's chat-level setting automatically and stamps it onto your outbound sends. No request-shape change is required — just call `POST /v1/messages` normally.
+
+**How the state is captured**
+
+- When the recipient changes the chat's disappearing-messages setting, WhatsApp delivers an explicit setting-change event to TextBubbles, which is recorded against the conversation.
+- When TextBubbles missed that event (for example because the message preceded the session being paired), the setting is also re-derived from regular inbound messages — WhatsApp embeds the current expiration on every message in the chat.
+- Late events that arrive out-of-order cannot overwrite a newer state — each capture carries the upstream timestamp and the older value is discarded.
+
+**Limitations**
+
+- If the recipient has WhatsApp's per-user default enabled but has not yet sent a message in your chat (and you haven't received an explicit setting-change), the chat's expiration is still unknown to TextBubbles. The first message you send to that chat will deliver successfully but the recipient will see the "old version" warning. The state self-heals as soon as the recipient replies — subsequent sends carry the correct expiration.
+- The expiration is applied to the outbound at the moment of send. If the recipient changes the setting after your message is delivered, that doesn't retroactively change your message.
+
 ## Reactions
 
 `POST /v1/messages/:id/reactions` works the same as for iMessage; the same `type` values apply on WhatsApp:

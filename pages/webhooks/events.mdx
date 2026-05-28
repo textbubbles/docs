@@ -227,6 +227,8 @@ Not every event fires for every channel. The matrix below documents which events
 
 Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes, or other verification codes (e.g. Apple ID, Google, bank account codes) are **not** dispatched as `message.inbound` webhooks or emitted on the `/v1/events` stream. They are also hidden from `GET /v1/messages`.
 
+**Exception — WhatsApp signup codes on unpaired numbers.** WhatsApp's "Your WhatsApp code: XXX-XXX" verification SMS is suppressed only when the receiving number's WhatsApp session is currently `connected`. When the same number is not paired — `not_enabled`, `disconnected`, or has no WhatsApp row — the code is delivered as a normal `message.inbound` event (with the `otp` fragment still attached), since operators registering WhatsApp on another device need to read it. Generic OTPs (Apple ID, bank, etc.) are unchanged. The [`GET /v1/whatsapp/numbers/:phoneNumber/signup-codes`](/whatsapp#signing-up-for-whatsapp-on-a-textbubbles-number) endpoint continues to surface codes regardless of paired state.
+
 ### Chat and sender fragments
 
 `message.inbound` and outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include `chat` and `sender` objects when the message is attributed to a known chat. Top-level `from`/`to` remain populated — consumers that only read those keys continue to work.
@@ -317,6 +319,31 @@ Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes
 | `handle` | string \| null | The sender's address as the provider supplied it (E.164 phone number for SMS/WhatsApp, phone or Apple ID for iMessage) |
 
 Outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`) include the same `chat` and `sender` objects when the originating outbound message was associated with a chat. Status events for messages without a stored chat omit both fields.
+
+#### `conversation` alias
+
+On `message.inbound` and outbound lifecycle events (`message.sent`, `message.delivered`, `message.read`, `message.failed`), the same fragment ships under a second key — `conversation` — with the legacy field names: `id` in place of `chatId` and `groupName` in place of `name`. All other fields (`providerChatGuid`, `channel`, `isGroup`, `participants`) are identical. Both keys are emitted together on the same payload, so consumers can read either without branching. (Chat events under `chat.*` do not include the alias — read `chat.chatId` / `chat.name` there.)
+
+```json
+"chat": {
+  "chatId": "660e8400-e29b-41d4-a716-446655440000",
+  "providerChatGuid": "120363025123456789@g.us",
+  "channel": "whatsapp",
+  "isGroup": true,
+  "name": "Launch Team",
+  "participants": [ /* ... */ ]
+},
+"conversation": {
+  "id": "660e8400-e29b-41d4-a716-446655440000",
+  "providerChatGuid": "120363025123456789@g.us",
+  "channel": "whatsapp",
+  "isGroup": true,
+  "groupName": "Launch Team",
+  "participants": [ /* ... */ ]
+}
+```
+
+`chat` is the canonical shape — new integrations should read it. `conversation` exists as a backwards-compat layer for clients that were built against an older revision of these docs.
 
 ### Example: WhatsApp quoted reply
 

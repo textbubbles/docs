@@ -85,6 +85,8 @@ Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes
 - **not** delivered via the `/v1/events` stream,
 - **not** returned by `GET /v1/messages`
 
+**Exception — WhatsApp signup codes on unpaired numbers.** Verification SMS in WhatsApp's "Your WhatsApp code: XXX-XXX" format are still suppressed on numbers whose WhatsApp session is currently `connected` (the code is intended for the paired session and isn't operator traffic). On numbers that are not paired — `not_enabled`, `disconnected`, or no WhatsApp row at all — the same codes are delivered as ordinary `message.inbound` webhooks, on the `/v1/events` stream, and via `GET /v1/messages`, with the `otp` fragment still attached. This is so operators can receive verification SMS when registering WhatsApp on another device. The dedicated [`GET /v1/whatsapp/numbers/:phoneNumber/signup-codes`](/whatsapp#signing-up-for-whatsapp-on-a-textbubbles-number) endpoint surfaces codes regardless of paired state and remains the recommended way to drive a pairing UI.
+
 ## Message Statuses
 
 | Status | Description |

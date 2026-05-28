@@ -618,6 +618,7 @@ When `chatId` is used:
 - If `from` is supplied, it must resolve to the chat's pinned instance — a mismatch returns 400 FROM_INSTANCE_CANNOT_REACH.
 - An unknown or foreign `chatId` returns 404 CONVERSATION_NOT_FOUND.
 - Supplying both `to` and `chatId`, or neither, returns 400 INVALID_REQUEST.
+- `conversationId` is accepted as an alias for `chatId` — either field name routes identically. Supply only one of the two; supplying both with different values returns 400 INVALID_REQUEST.
 - Group send on SMS is not supported; returns 400 GROUP_SMS_UNSUPPORTED.
 - `createContact` is ignored (no single recipient).
 
@@ -640,6 +641,7 @@ Every request must include at least one of `content.text` (non-empty), `content.
 |-------|------|----------|-------------|
 | to | string | Conditionally | Recipient phone number (E.164) or iMessage email address. Required unless chatId is provided; mutually exclusive with chatId. |
 | chatId | string (UUID) | Conditionally | Conversation UUID (the `chat.chatId` from POST /v1/chats/groups). Sends into the existing chat; channel and instance are pinned. Required unless to is provided; mutually exclusive with to. |
+| conversationId | string (UUID) | No | Alias for `chatId` — either field name routes identically. Supply only one of the two; supplying both with different values returns 400 INVALID_REQUEST. |
 | from | string | No | Sender address (must be authorized; uses default if omitted). When chatId is supplied, must resolve to the chat's pinned instance. |
 | content.text | string | No | Message text (up to 10,000 chars). Optional if content.mediaUrls or attachments[] is provided. May be omitted or empty for attachment-only messages (voice notes, images with no caption). |
 | content.mediaUrls | string[] | No | Array of 1-20 HTTPS image URLs. When 2+ URLs are provided, sends as an image carousel |
@@ -760,6 +762,8 @@ Inbound messages detected as one-time passcodes, 2FA codes, password-reset codes
 - not dispatched as `message.inbound` webhooks
 - not delivered via the `/v1/events` stream
 - not returned by `GET /v1/messages` or `GET /v1/messages/:id`
+
+Exception — WhatsApp signup codes on unpaired numbers: WhatsApp's "Your WhatsApp code: XXX-XXX" verification SMS is suppressed only when the receiving number's WhatsApp session is `connected`. When the same number is not paired (`not_enabled`, `disconnected`, or no WhatsApp row), the code is delivered as a normal `message.inbound` event, on the `/v1/events` stream, and via `GET /v1/messages` — the `otp` fragment is still attached. Operators registering WhatsApp on another device rely on this. Generic OTPs (Apple ID, bank, etc.) are unchanged. GET /v1/whatsapp/numbers/:phoneNumber/signup-codes continues to surface codes regardless of paired state.
 
 ## Message Endpoints
 
@@ -1505,6 +1509,13 @@ Group inbound:
 | isGroup | boolean | true for group chats, false for 1:1 |
 | name | string \| null | Group display name. null for 1:1 chats |
 | participants | array | Active roster. Each entry: { handle, contactId, role, isPhoneResolved }. `role` is `member`, `owner`, or `self`. `isPhoneResolved` is true when `handle` is phone-based or `"self"`, false when only a `@lid` is known. Branch on `isPhoneResolved`, not on the suffix of `handle` |
+
+`conversation` alias: on `message.inbound` and outbound lifecycle events (message.sent, message.delivered, message.read, message.failed), the same fragment also ships under a second key — `conversation` — with the legacy field names: `id` in place of `chatId` and `groupName` in place of `name`. All other fields (`providerChatGuid`, `channel`, `isGroup`, `participants`) are identical. Both keys are emitted together on the same payload. `chat` is the canonical shape — new integrations should read it; `conversation` exists as a backwards-compat layer for clients built against an older revision of these docs. Chat events under `chat.*` do not include the alias — read `chat.chatId` / `chat.name` there.
+
+```json
+"chat": { "chatId": "660e8400-...", "providerChatGuid": "120363025...@g.us", "channel": "whatsapp", "isGroup": true, "name": "Launch Team", "participants": [...] },
+"conversation": { "id": "660e8400-...", "providerChatGuid": "120363025...@g.us", "channel": "whatsapp", "isGroup": true, "groupName": "Launch Team", "participants": [...] }
+```
 
 `sender` fields:
 
@@ -2292,6 +2303,21 @@ Video preferred (sent as-is): MP4 with H.264 video and AAC audio (or no audio tr
 
 Voice notes preferred (sent as-is): Opus in OGG. Any other audio format sent with `attachments[].isAudioMessage: true` is transcoded to Opus-in-OGG before send.
 
+## Disappearing messages
+
+WhatsApp lets a recipient enable disappearing messages on a chat (per-chat, or via WhatsApp's per-user default for new chats). When the chat has disappearing messages enabled, outbound messages must carry the matching expiration — otherwise the recipient sees "This message will not disappear from the chat. The sender may be on an old version of WhatsApp."
+
+TextBubbles tracks the recipient's chat-level setting automatically and stamps it onto outbound sends. No request-shape change is required — call POST /v1/messages normally.
+
+How state is captured:
+- When the recipient changes the chat's disappearing-messages setting, WhatsApp delivers an explicit setting-change event to TextBubbles, which is recorded against the conversation.
+- If TextBubbles missed that event (e.g. message preceded the paired session), the setting is also re-derived from regular inbound messages — WhatsApp embeds the current expiration on every message.
+- Out-of-order events cannot overwrite a newer state — each capture carries the upstream timestamp.
+
+Limitations:
+- If the recipient has WhatsApp's per-user default enabled but has not yet sent a message in your chat (and no explicit setting-change has been observed), the chat's expiration is unknown to TextBubbles. The first message you send to that chat will deliver successfully but the recipient will see the "old version" warning. State self-heals as soon as the recipient replies.
+- The expiration is applied at the moment of send. A later change on the recipient's side does not retroactively re-stamp delivered messages.
+
 ## Reaction type → emoji
 
 | type | emoji |
@@ -2342,6 +2368,11 @@ Detector rules (deliberately conservative):
 - provider "whatsapp" / high confidence: matches WhatsApp's canonical "Your WhatsApp code: XXX-XXX" signup SMS shape.
 - provider "generic" / medium confidence: 4–8 digit codes (flat or XXX-XXX / XXX XXX) PLUS a context keyword — one of `code`, `verification`, `verify`, `otp`, `one-time`, `security code`, `passcode`, `pin`, `do not share`.
 - NOT flagged: bare numbers without context ("2026", "my address is 4th", "I am 34"), or keywords without a digit group ("what's the code?").
+
+Suppression of detected OTPs from message.inbound / /v1/events / GET /v1/messages is conditional:
+- generic OTPs (Apple ID, Google, bank, etc.) — always suppressed.
+- WhatsApp signup codes ("Your WhatsApp code: ..." form) — suppressed only when the receiving number's WhatsApp session is `connected`. On numbers that are not paired (`not_enabled`, `disconnected`, no WhatsApp row), the code is delivered as a normal inbound (with the `otp` fragment still attached) so operators registering WhatsApp on another device can receive it.
+- GET /v1/whatsapp/numbers/:phoneNumber/signup-codes returns codes regardless of paired state.
 
 Use cases: auto-populate a user's 2FA field, forward codes to a secure audit channel, render a reveal-on-click chip in a UI.
 
