@@ -59,11 +59,36 @@ This repo is **public**. Commit messages, PR titles, PR descriptions, PR/issue c
 
 The "why" behind a docs change belongs in the matching `api/` PR (private) or the task card in Lamar's vault, never in this repo.
 
-## Docs-sync contract (from workspace `CLAUDE.md`)
+## Docs-sync contract (CRITICAL)
 
-When an API change lands in `api/`, this repo must be updated in the same session. The canonical machine-readable spec is `public/llms-full.txt`; keep it in sync with the MDX pages under `pages/`. `public/llms.txt` has the endpoint summary only.
+When an API change lands in `api/`, this repo must be updated in the same session. **Every MDX edit under `pages/` MUST be mirrored into the machine-readable specs under `public/`.** Skipping this drifts the LLM-facing surface away from the human-facing pages, and external agents that consume `llms-full.txt` produce broken integrations.
 
-Run `npm run build` before declaring docs changes done — it validates MDX.
+### Required updates per change type
+
+| Change in `pages/**/*.mdx` | Also update |
+|---|---|
+| New / modified endpoint | `public/llms-full.txt` + `public/llms.txt` (endpoint summary) |
+| Changed request / response schema | `public/llms-full.txt` |
+| New / changed error code | `public/llms-full.txt` |
+| New / changed webhook event | `public/llms-full.txt` |
+| New / removed query parameter | `public/llms-full.txt` |
+| Removed / deprecated feature | `public/llms-full.txt` + `public/llms.txt` + `public/sitemap.xml` |
+| New page added under `pages/` | `public/sitemap.xml` |
+
+### Files in `public/`
+
+- `llms.txt` — concise endpoint overview for LLM agents (~100 lines).
+- `llms-full.txt` — complete API reference, single file, ~2.5k lines. The canonical machine-readable spec.
+- `sitemap.xml` — page listing with priority hints.
+- `robots.txt` — crawler directives.
+
+### Verify before declaring done
+
+```bash
+npm run build   # validates MDX + catches broken links
+```
+
+If you cannot run `npm run build` in the current environment, say so explicitly rather than claiming the change is verified.
 
 ## Deploy
 
