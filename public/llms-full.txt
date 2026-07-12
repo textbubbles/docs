@@ -2392,6 +2392,8 @@ Send-path error codes surface on the message as `errorCode` (GET /v1/messages/:i
 - FROM_INSTANCE_CANNOT_REACH — an explicit `from` was supplied and that specific sender cannot reach the recipient on any of the requested channels (e.g. the `from` number is not paired with WhatsApp), or — when sending with `chatId` — the `from` resolves to a different instance than the one the chat is pinned to. Pair the sender, pick a `from` that supports the channel, or omit `from` to let the chat's pinned instance handle delivery.
 - WHATSAPP_NOT_CONNECTED — no paired WhatsApp session for this number. Pair via Settings → WhatsApp in the textbubbles UI or the /v1/whatsapp/** API.
 - WHATSAPP_SEND_FAILED — generic send failure (transient upstream, unfetchable attachment URL, etc). Safe to retry.
+- WHATSAPP_RATE_LIMITED — WhatsApp temporarily rate-limited the sending account for new outreach (provider error 463). Not retryable until the limit expires (typically hours); existing conversations are usually unaffected. Can arrive via message.failed after message.sent; the later event is authoritative.
+- WHATSAPP_REJECTED — WhatsApp rejected the message after relay; raw provider code included in the error message. Can arrive via message.failed after message.sent; the later event is authoritative.
 - WHATSAPP_MEDIA_TOO_LARGE — attachment exceeds WhatsApp's size limits (16 MB image / 64 MB video / 100 MB document)
 - WHATSAPP_REACTION_FAILED — reaction could not be delivered
 - MISSING_WHATSAPP_JID — POST /v1/messages/:id/reactions target has no stored WhatsApp JID; should be rare for messages sent through the API
