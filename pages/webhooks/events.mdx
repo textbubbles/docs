@@ -204,7 +204,7 @@ Not every event fires for every channel. The matrix below documents which events
 |-------|------|-------------|
 | `messageId` | string | Internal TextBubbles message ID. Use this when calling endpoints like `POST /v1/messages/:id/reactions` or `PUT /v1/messages/:id` in response to the inbound message |
 | `externalMessageId` | string | Provider-level identifier (iMessage GUID or WhatsApp message id) — use for correlating with provider logs |
-| `from` | string | Sender's phone number in E.164 (or email for iMessage email addresses). For WhatsApp senders on WA's LID privacy mode, TextBubbles resolves the LID to the real E.164 number before emitting the webhook |
+| `from` | string \| null | Sender's phone number in E.164 (or email for iMessage email addresses). For WhatsApp senders on WA's LID privacy mode, TextBubbles resolves the LID to the real E.164 number before emitting the webhook. `null` when no phone number can be resolved — attribute via `sender.handle` and `chat.chatId` |
 | `to` | string | Receiving phone number or email (identifies which instance received the message) |
 | `text` | string | Message text content |
 | `channel` | string | Channel the message was received on: `imessage`, `sms`, or `whatsapp` |
@@ -391,7 +391,7 @@ WhatsApp contacts emit a typing event while composing a message. The webhook sur
 | Field | Type | Description |
 |-------|------|-------------|
 | `state` | string | Always `"composing"` today. Future states (`paused`, etc.) may be added |
-| `from` | string | E.164 phone number of the contact who is typing |
+| `from` | string \| null | E.164 phone number of the contact who is typing. `null` when the contact is LID-addressed and no phone number can be resolved — `sender.handle` carries the stable identifier |
 | `channel` | string | Always `"whatsapp"` — iMessage typing indicators are not surfaced as webhooks |
 | `customerId` | string | Customer the event belongs to |
 

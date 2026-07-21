@@ -96,7 +96,13 @@ curl -X POST -H "Authorization: Bearer $TB_KEY" \
 # Permanently remove the session — credentials are deleted, next pair requires a fresh QR
 curl -X DELETE -H "Authorization: Bearer $TB_KEY" \
   "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM"
+
+# Wipe stored credentials but keep the number registered — use before re-pairing
+curl -X POST -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/reset-auth"
 ```
+
+Call `reset-auth` before re-pairing a previously linked number: a fresh QR link must not reuse the old session's credentials. After it returns, run the [pairing flow](#pairing-a-number) again with `enable`.
 
 **Check whether a recipient is on WhatsApp**
 

@@ -1409,7 +1409,7 @@ Fired when an incoming FaceTime call is detected on an instance.
 |-------|------|-------------|
 | messageId | string | Internal TextBubbles message ID. Use this when calling endpoints like `POST /v1/messages/:id/reactions` or `PUT /v1/messages/:id` in response to the inbound message |
 | externalMessageId | string | Provider-level identifier (iMessage GUID or WhatsApp message id) — use for correlating with provider logs |
-| from | string | Sender's phone number in E.164 (or email for iMessage email addresses). For WhatsApp senders on WA's LID privacy mode, TextBubbles resolves the LID to the real E.164 number before emitting the webhook |
+| from | string \| null | Sender's phone number in E.164 (or email for iMessage email addresses). For WhatsApp senders on WA's LID privacy mode, TextBubbles resolves the LID to the real E.164 number before emitting the webhook. null when no phone number can be resolved — attribute via sender.handle and chat.chatId |
 | to | string | Receiving phone number or email (identifies which instance received the message) |
 | text | string | Message text content |
 | channel | string | Channel the message was received on: `imessage`, `sms`, or `whatsapp` |
@@ -1572,7 +1572,7 @@ WhatsApp contacts emit a typing event while composing a message. The webhook sur
 | Field | Type | Description |
 |-------|------|-------------|
 | state | string | Always `"composing"` today. Future states (`paused`, etc.) may be added |
-| from | string | E.164 phone number of the contact who is typing |
+| from | string \| null | E.164 phone number of the contact who is typing. null when the contact is LID-addressed and no phone number can be resolved — sender.handle carries the stable identifier |
 | channel | string | Always `"whatsapp"` — iMessage typing indicators are not surfaced as webhooks |
 | customerId | string | Customer the event belongs to |
 
@@ -1602,7 +1602,7 @@ Recommended consumer behavior: treat each `typing.indicator` event as "show a ty
 | status | string | `qr_pending` / `connecting` / `connected` / `disconnected` |
 | qrCode | string \| null | Present when `status` is `qr_pending` — raw QR string, render with any library |
 | jid | string \| null | Present when `status` is `connected` — the paired WhatsApp JID (usually `<phone>:<device>@s.whatsapp.net`) |
-| disconnectReason | string \| null | Present when `status` is `disconnected` — `auth_revoked`, `phone_number_mismatch`, or `close_<code>` |
+| disconnectReason | string \| null | Present when `status` is `disconnected` — `auth_revoked`, `phone_number_mismatch`, `auth_reset`, `terminal_<code>`, `reconnect_exhausted`, or `close_<code>` |
 | customerId | string | Customer the session belongs to |
 
 Subscribe from the textbubbles UI or from any SSE-capable client via `GET /v1/events?events=whatsapp.status`.
@@ -2341,6 +2341,7 @@ All endpoints are scoped to numbers the caller's API key owns. Requests for a nu
 - GET /v1/whatsapp/numbers/:phoneNumber/qr — { qrCode } raw string, render with any QR lib
 - POST /v1/whatsapp/numbers/:phoneNumber/pairing-code — 8-char alternative to scanning a QR. Optional body { phoneNumber } to pair a different device; defaults to the owned number.
 - POST /v1/whatsapp/numbers/:phoneNumber/disconnect — drop live session, keep credentials (quick reconnect)
+- POST /v1/whatsapp/numbers/:phoneNumber/reset-auth — wipe stored credentials but keep the number registered; use before re-pairing so a fresh QR link does not reuse a dead session's credentials
 - DELETE /v1/whatsapp/numbers/:phoneNumber — remove session entirely; next pair requires a fresh QR
 - GET /v1/whatsapp/numbers/:phoneNumber/check?phone=+1... — is the recipient on WhatsApp?
 - GET /v1/whatsapp/numbers/:phoneNumber/signup-codes — surface any WhatsApp verification SMS codes received in the last 15 minutes; used by the UI during WhatsApp account signup. Returns { windowMinutes, codes: [{ code, messageId, from, channel, receivedAt }] }.
