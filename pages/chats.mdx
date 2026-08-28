@@ -26,6 +26,8 @@ Every `/v1/chats/*` response embeds `data.chat`, a single canonical object that 
 
 Create a new group chat with one or more participants. Defaults to iMessage; pass `channel: "whatsapp"` to create a WhatsApp group.
 
+> **Android (SMS) groups — coming soon (WIP).** Today, iMessage group chats require every participant to be on iMessage. Adding an Android (SMS) recipient is not yet supported; it's on the roadmap.
+
 ### Request
 
 ```bash
@@ -44,7 +46,7 @@ curl -X POST https://api.textbubbles.com/v1/chats/groups \
 |-------|------|----------|-------------|
 | `participants` | string[] | Yes | One or more phone numbers (E.164). On iMessage, Apple IDs are also accepted. On WhatsApp, values are normalized to JIDs server-side |
 | `name` | string | Conditional | Initial display name. **Required** when `channel` is `"whatsapp"` (returns `400 NAME_REQUIRED` if omitted). Optional for iMessage |
-| `channel` | string | No | `"imessage"` (default) or `"whatsapp"` |
+| `channel` | string | No | `"imessage"` (default) or `"whatsapp"`. Android (SMS) coming soon |
 | `from` | string | No | Sender address (E.164). When supplied, the group is created from that specific instance; otherwise the customer's default instance for the chosen channel is used |
 
 ### Response (201)

@@ -1819,7 +1819,7 @@ Every /v1/chats/* response embeds `data.chat`, a single canonical object that al
 
 ## POST /v1/chats/groups
 
-Create a new group chat. Defaults to iMessage; pass `channel: "whatsapp"` to create a WhatsApp group.
+Create a new group chat. Defaults to iMessage; pass `channel: "whatsapp"` to create a WhatsApp group. Android (SMS) groups are coming soon (WIP) — today, iMessage group chats require every participant to be on iMessage.
 
 ```bash
 curl -X POST https://api.textbubbles.com/v1/chats/groups \
@@ -1843,7 +1843,7 @@ Body:
 |-------|------|----------|-------------|
 | participants | string[] | Yes | One or more phone numbers (E.164). iMessage also accepts Apple IDs. WhatsApp normalizes to JID server-side |
 | name | string | Conditional | Required when channel is "whatsapp" (returns 400 NAME_REQUIRED if omitted). Optional for iMessage |
-| channel | string | No | "imessage" (default) or "whatsapp" |
+| channel | string | No | "imessage" (default) or "whatsapp". Android (SMS) coming soon |
 | from | string | No | Sender address (E.164). When supplied, the group is created from that specific instance and pinned to it; otherwise the customer's default instance for the chosen channel is used |
 
 Response (201) — iMessage:

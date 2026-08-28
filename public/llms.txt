@@ -59,7 +59,7 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 - GET /v1/capabilities/:phone — Check iMessage/SMS/FaceTime support
 
 ### Chats
-- POST /v1/chats/groups — Create a group chat. Pass `channel: "whatsapp"` for a WhatsApp group (name is required, 400 NAME_REQUIRED otherwise). Defaults to iMessage. Returns `chat: ChatFragment` (UUID `chatId`, `providerChatGuid`, channel, isGroup, name, participants)
+- POST /v1/chats/groups — Create a group chat. Pass `channel: "whatsapp"` for a WhatsApp group (name is required, 400 NAME_REQUIRED otherwise). Defaults to iMessage. Android (SMS) groups coming soon. Returns `chat: ChatFragment` (UUID `chatId`, `providerChatGuid`, channel, isGroup, name, participants)
 - GET /v1/chats/:chatId — Get chat info
 - PUT /v1/chats/:chatId/name — Rename a group chat (iMessage + WhatsApp)
 - POST /v1/chats/:chatId/participants — Add a participant (iMessage + WhatsApp)
