@@ -826,11 +826,15 @@ Send emoji reactions to messages via POST /v1/messages/:id/reactions. Tapbacks a
 
 The `:id` in the URL is the internal TextBubbles message ID (e.g. `msg_abc123`) — not the provider GUID. For outbound messages this is the ID returned from POST /v1/messages. For inbound messages received via the `message.inbound` webhook, use the `messageId` field in the webhook payload (not `externalMessageId`).
 
+## Send a Reaction
+
 ```bash
 curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/reactions \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"type": "love"}'
+  -d '{
+    "type": "love"
+  }'
 ```
 
 Response:
@@ -859,16 +863,63 @@ Response:
 
 ## Remove a Reaction
 
-To remove a reaction you previously sent, POST to the same endpoint with the negative form of the type: `-love`, `-like`, `-dislike`, `-laugh`, `-emphasize`, `-question`.
+To remove a reaction you previously sent, send the negative form of the same type (`-love`, `-like`, `-dislike`, `-laugh`, `-emphasize`, `-question`):
 
-```
+```bash
 curl -X POST https://api.textbubbles.com/v1/messages/msg_abc123/reactions \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"type": "-love"}'
+  -d '{
+    "type": "-love"
+  }'
 ```
 
 You can only remove a reaction that you previously added via the API.
+
+## Reaction Webhooks
+
+When a reaction is received on an inbound message, you'll get a structured webhook payload:
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "message.reaction",
+  "timestamp": "2026-03-28T10:00:00.000Z",
+  "data": {
+    "reaction": {
+      "type": "love",
+      "targetMessageId": "msg_xyz789",
+      "targetExternalId": "guid-of-original-message",
+      "content": "Loved \"Hello!\""
+    },
+    "from": "+14155551234",
+    "channel": "imessage"
+  }
+}
+```
+
+### Emoji Reactions (iOS 17+)
+
+iOS 17 and macOS 14 introduced emoji and sticker reactions. These are delivered with `type: "emoji"` and include the emoji character:
+
+```json
+{
+  "id": "evt_def456",
+  "type": "message.reaction",
+  "timestamp": "2026-03-28T10:00:05.000Z",
+  "data": {
+    "reaction": {
+      "type": "emoji",
+      "emoji": "🥓",
+      "targetMessageId": "msg_xyz789",
+      "targetExternalId": "guid-of-original-message",
+      "content": null
+    },
+    "from": "+14155551234",
+    "channel": "imessage"
+  }
+}
+```
 
 Notes:
 - iMessage only — returns 400 CHANNEL_NOT_SUPPORTED for SMS
@@ -881,6 +932,19 @@ Notes:
 # Message Effects
 
 Add visual effects to iMessage messages using the `effect` field. Effects are silently ignored if the message falls back to SMS.
+
+## Usage
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/messages \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+14155551234",
+    "content": { "text": "Congratulations!" },
+    "effect": "fireworks"
+  }'
+```
 
 ## Bubble Effects
 
@@ -928,8 +992,11 @@ curl -X POST https://api.textbubbles.com/v1/webhooks \
       "message.queued",
       "message.sent",
       "message.delivered",
+      "message.read",
       "message.failed",
-      "message.inbound"
+      "message.inbound",
+      "message.reaction",
+      "typing.indicator"
     ]
   }'
 ```
@@ -943,12 +1010,13 @@ Response:
     "id": "b1a9e4e6-...-9f21",
     "name": "TextBubbles Events",
     "url": "https://your-server.com/webhooks/textbubbles",
-    "events": ["message.delivered", "message.failed"],
+    "events": ["message.delivered", "message.failed", "..."],
     "active": true,
     "secret": "whsec_generated_signing_secret_value",
     "createdAt": "2026-04-21T10:00:00.000Z",
     "updatedAt": "2026-04-21T10:00:00.000Z"
-  }
+  },
+  "requestId": "req_abc123"
 }
 ```
 
@@ -982,7 +1050,36 @@ curl https://api.textbubbles.com/v1/webhooks/list \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-Returns an array of your registered webhooks. Secrets are never returned in list or get responses.
+Response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "b1a9e4e6-...-9f21",
+      "name": "TextBubbles Events",
+      "url": "https://your-server.com/webhooks/textbubbles",
+      "events": ["message.delivered", "message.failed"],
+      "active": true,
+      "createdAt": "2026-04-21T10:00:00.000Z",
+      "updatedAt": "2026-04-21T10:00:00.000Z"
+    },
+    {
+      "id": "c8d2f1a0-...-3c74",
+      "name": null,
+      "url": "https://your-server.com/webhooks/inbound",
+      "events": ["message.inbound"],
+      "active": true,
+      "createdAt": "2026-04-21T11:00:00.000Z",
+      "updatedAt": "2026-04-21T11:00:00.000Z"
+    }
+  ],
+  "requestId": "req_abc123"
+}
+```
+
+Secrets are never returned in list or get responses.
 
 ## Get a Single Webhook
 
@@ -1000,7 +1097,7 @@ curl -X PATCH https://api.textbubbles.com/v1/webhooks/{id} \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "events": ["message.delivered", "message.failed"]
+    "events": ["message.delivered", "message.failed", "message.inbound"]
   }'
 ```
 
@@ -1022,7 +1119,19 @@ curl -X POST https://api.textbubbles.com/v1/webhooks/{id}/test \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-Delivers a synthetic `webhook.test` event to one specific webhook, signed with its own secret.
+Delivers a synthetic `webhook.test` event to one specific webhook, signed with its own secret. The test event delivered to your endpoint has this shape:
+
+```json
+{
+  "id": "evt_test_550e8400-e29b-41d4-a716-446655440000",
+  "type": "webhook.test",
+  "timestamp": "2026-04-21T10:00:00.000Z",
+  "data": {
+    "message": "This is a test event from TextBubbles...",
+    "webhookId": "b1a9e4e6-...-9f21"
+  }
+}
+```
 
 ## Rotate a Webhook's Signing Secret
 
@@ -1031,7 +1140,26 @@ curl -X POST https://api.textbubbles.com/v1/webhooks/{id}/rotate-secret \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
-Returns the new secret plaintext in the response. It cannot be retrieved later — store it immediately.
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "b1a9e4e6-...-9f21",
+    "name": "TextBubbles Events",
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": ["message.delivered"],
+    "active": true,
+    "secret": "whsec_new_generated_secret_value",
+    "createdAt": "2026-04-21T10:00:00.000Z",
+    "updatedAt": "2026-04-21T12:30:00.000Z"
+  },
+  "requestId": "req_abc123"
+}
+```
+
+The new secret plaintext is returned only once — store it immediately, it cannot be retrieved later.
 
 ## Legacy Single-Webhook Endpoints (deprecated)
 
@@ -1058,7 +1186,15 @@ Each webhook signs with its own secret — the one you supplied on create, or th
 
 Every webhook delivery also carries:
 
-- X-Correlation-Id — `cor_{32 hex chars}` correlation id that ties the delivery back to the originating message lifecycle. The same id is accepted on every API request (you can supply your own; one is minted otherwise) and echoed on every API response, so you can stitch your logs to ours. Treat it as opaque. If you supply one it must match `cor_<32 hex chars>`; anything else is replaced with a freshly minted id.
+- X-Correlation-Id — `cor_{32 hex chars}` correlation id that ties the delivery back to the originating message lifecycle. The same id is accepted on every API request (you can supply your own; one is minted otherwise) and echoed on every API response, so you can stitch your logs to ours:
+
+```
+You POST /v1/messages with -H 'X-Correlation-Id: cor_abc...'
+   ↓ same id on the response
+   ↓ same id on the message.queued / message.sent / message.delivered webhooks back to you
+```
+
+Treat it as an opaque string. If you supply one it must match `cor_<32 hex chars>`; anything else is replaced with a freshly minted id.
 
 ### Verification Steps
 
@@ -1088,6 +1224,23 @@ Use this known-good fixture to verify your implementation. If your code produces
 | Raw body | `{"id":"evt_550e8400-e29b-41d4-a716-446655440000","type":"message.delivered","timestamp":"2026-03-28T10:00:03.000Z","data":{"messageId":"msg_xyz","externalMessageId":"external-guid","from":"+19876543210","to":"+14155551234","text":"Hello!","channel":"imessage","status":"delivered"}}` |
 | Expected X-Signature | `sha256=d055c034071c12e906654f864c1e5a03fbdea2399444cdf4448f35bf81218977` |
 
+```javascript
+import crypto from 'crypto';
+
+const secret = 'whsec_test_secret_do_not_use_in_production';
+const timestamp = '1774699203';
+const rawBody = '{"id":"evt_550e8400-e29b-41d4-a716-446655440000","type":"message.delivered","timestamp":"2026-03-28T10:00:03.000Z","data":{"messageId":"msg_xyz","externalMessageId":"external-guid","from":"+19876543210","to":"+14155551234","text":"Hello!","channel":"imessage","status":"delivered"}}';
+
+const signedPayload = `${timestamp}.${rawBody}`;
+const signature = 'sha256=' + crypto
+  .createHmac('sha256', secret)
+  .update(signedPayload)
+  .digest('hex');
+
+console.log(signature);
+// → sha256=d055c034071c12e906654f864c1e5a03fbdea2399444cdf4448f35bf81218977
+```
+
 ### Common Verification Pitfalls
 
 - Re-serializing parsed JSON. `JSON.stringify(req.body)` or `json.dumps(request.json())` will almost never reproduce the exact bytes the API signed. Always verify against the raw body.
@@ -1096,16 +1249,22 @@ Use this known-good fixture to verify your implementation. If your code produces
 - Forgetting the `sha256=` prefix in the comparison string.
 - Using the wrong webhook's secret. If you register multiple webhooks that point at different endpoints, each one has its own secret. Verify each endpoint using the secret you received when creating (or rotating) that specific webhook.
 
-### Node.js Example
+### Node.js Example (Express)
+
+The critical detail: capture the raw body buffer before `express.json()` parses it. Verifying against a re-serialized `req.body` will fail.
 
 ```javascript
 import crypto from 'crypto';
 import express from 'express';
 
 const app = express();
-app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+// Capture raw body bytes for signature verification
+app.use(express.json({
+  verify: (req, _res, buf) => { req.rawBody = buf.toString('utf8'); }
+}));
+
+const WEBHOOK_SECRET = process.env.TEXTBUBBLES_WEBHOOK_SECRET;
 
 function verifySignature(req) {
   const signature = req.headers['x-signature'];
@@ -1113,20 +1272,22 @@ function verifySignature(req) {
 
   if (!signature || !timestamp) return false;
 
-  // Reject requests older than 5 minutes
-  const age = Math.abs(Date.now() / 1000 - parseInt(timestamp));
+  // Reject requests older than 5 minutes (timestamp is in seconds)
+  const age = Math.abs(Math.floor(Date.now() / 1000) - parseInt(timestamp, 10));
   if (age > 300) return false;
 
+  // Use the raw body string, NOT JSON.stringify(req.body)
   const signedPayload = `${timestamp}.${req.rawBody}`;
   const expected = 'sha256=' + crypto
     .createHmac('sha256', WEBHOOK_SECRET)
     .update(signedPayload)
     .digest('hex');
 
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expected)
-  );
+  // Constant-time comparison — both buffers must be the same length
+  const sigBuf = Buffer.from(signature);
+  const expBuf = Buffer.from(expected);
+  if (sigBuf.length !== expBuf.length) return false;
+  return crypto.timingSafeEqual(sigBuf, expBuf);
 }
 
 app.post('/webhooks/textbubbles', (req, res) => {
@@ -1161,12 +1322,18 @@ import hmac
 import hashlib
 import time
 
-def verify_webhook(payload_body, signature, timestamp, secret):
+def verify_webhook(raw_body: str, signature: str, timestamp: str, secret: str) -> bool:
+    """
+    raw_body: the exact request body as a string (do NOT re-serialize parsed JSON)
+    signature: value of the X-Signature header, e.g. "sha256=abc123..."
+    timestamp: value of the X-Timestamp header (unix seconds, as a string)
+    secret: the signing secret for this webhook
+    """
     age = abs(time.time() - int(timestamp))
     if age > 300:
         return False
 
-    signed_payload = f"{timestamp}.{payload_body}"
+    signed_payload = f"{timestamp}.{raw_body}"
     expected = "sha256=" + hmac.new(
         secret.encode(), signed_payload.encode(), hashlib.sha256
     ).hexdigest()
@@ -1627,16 +1794,17 @@ Subscribe from the textbubbles UI or from any SSE-capable client via `GET /v1/ev
 }
 ```
 
-Emoji reactions (iOS 17+):
+Emoji and sticker reactions (iOS 17+ / macOS 14+) include an `emoji` field:
 
 ```json
 {
   "id": "evt_def456",
   "type": "message.reaction",
+  "timestamp": "2026-03-28T10:00:05.000Z",
   "data": {
     "reaction": {
       "type": "emoji",
-      "emoji": "bacon emoji",
+      "emoji": "🥓",
       "targetMessageId": "msg_xyz789",
       "targetExternalId": "guid-of-original-message",
       "content": null
@@ -1794,6 +1962,77 @@ All chat events share the same envelope:
 ```
 
 The event does not include the new photo — retrieve it through the chat resource.
+
+## Subscribing to Events
+
+Select which events to receive when configuring your webhook:
+
+```bash
+curl -X PUT https://api.textbubbles.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": [
+      "message.sent",
+      "message.delivered",
+      "message.read",
+      "message.failed",
+      "message.inbound",
+      "message.reaction",
+      "message.inbound"
+    ]
+  }'
+```
+
+To subscribe to all events, use the wildcard:
+
+```bash
+curl -X PUT https://api.textbubbles.com/v1/webhooks \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-server.com/webhooks/textbubbles",
+    "events": ["*"]
+  }'
+```
+
+## Realtime SSE
+
+If you cannot host a public webhook URL — for example during local development, inside a script, or from a browser app — open a Server-Sent Events stream to `GET /v1/events` instead. The stream emits the same event types and payloads as webhooks, over a single long-lived HTTP connection.
+
+```bash
+curl -N -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://api.textbubbles.com/v1/events?events=message.inbound"
+```
+
+The `events` query parameter is an optional comma-separated filter; omit it (or pass `*`) to receive every event.
+
+Each frame in the stream is a standard SSE message:
+
+```
+id: evt_abc
+event: message.inbound
+data: {"id":"evt_abc","type":"message.inbound","timestamp":"2026-04-14T10:00:00.000Z","data":{"messageId":"msg_...","from":"+14155551234","text":"Hi"}}
+```
+
+A `: heartbeat` comment is sent every 15 seconds so clients can detect dead connections.
+
+SSE vs webhooks: SSE is fire-and-forget — events emitted while no client is connected are not replayed. Use webhooks when you need at-least-once delivery with retries. SSE is ideal as a lightweight complement: live UI updates during development, admin dashboards, or inbound-message relays where occasional gaps during reconnects are acceptable.
+
+The TypeScript SDK ships a ready-made SSE client:
+
+```ts
+import { TextBubblesEventClient } from "@textbubbles/js";
+
+const events = new TextBubblesEventClient({
+  url: "https://api.textbubbles.com/v1/events",
+  headers: { Authorization: `Bearer ${process.env.TEXTBUBBLES_API_KEY}` },
+});
+
+events.on("message.inbound", (e) => console.log(e.data.from, e.data.text));
+events.connect();
+```
 
 ---
 
@@ -2119,7 +2358,26 @@ Response:
     "recommendedChannel": "imessage",
     "lastChecked": "2026-03-28T09:55:00.000Z",
     "cached": true
-  }
+  },
+  "requestId": "req_abc123"
+}
+```
+
+When the recipient is currently in a Focus mode, the response also includes `focusMode`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "phoneNumber": "+14155551234",
+    "capabilities": { "imessage": true, "sms": true, "facetime": true },
+    "focused": true,
+    "focusMode": "Do Not Disturb",
+    "recommendedChannel": "imessage",
+    "lastChecked": "2026-03-28T09:55:00.000Z",
+    "cached": false
+  },
+  "requestId": "req_abc123"
 }
 ```
 
@@ -2345,6 +2603,110 @@ All endpoints are scoped to numbers the caller's API key owns. Requests for a nu
 - DELETE /v1/whatsapp/numbers/:phoneNumber — remove session entirely; next pair requires a fresh QR
 - GET /v1/whatsapp/numbers/:phoneNumber/check?phone=+1... — is the recipient on WhatsApp?
 - GET /v1/whatsapp/numbers/:phoneNumber/signup-codes — surface any WhatsApp verification SMS codes received in the last 15 minutes; used by the UI during WhatsApp account signup. Returns { windowMinutes, codes: [{ code, messageId, from, channel, receivedAt }] }.
+
+### Customer endpoint examples
+
+List your numbers with current WA status:
+
+```bash
+curl -H "Authorization: Bearer $TB_KEY" https://api.textbubbles.com/v1/whatsapp
+```
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "phoneNumber": "+16282895642",
+      "whatsapp": {
+        "status": "connected",
+        "jid": "16282895642:2@s.whatsapp.net",
+        "lastConnectedAt": "2026-04-20T20:39:55.000Z",
+        "lastDisconnectedAt": null,
+        "disconnectReason": null
+      }
+    }
+  ]
+}
+```
+
+Start pairing (QR flow):
+
+```bash
+NUM="+16282895642"
+# 1. Create the session and start QR flow
+curl -X POST -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/enable"
+
+# 2. Poll for the raw QR string (render with any QR library)
+curl -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/qr"
+
+# 3. On the phone for this number: WhatsApp → Settings → Linked Devices → Link a Device → scan
+
+# 4. Confirm the pair
+curl -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/status"
+```
+
+Pair-by-code (no QR display):
+
+```bash
+curl -X POST -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/pairing-code"
+```
+
+Disconnect / remove:
+
+```bash
+# Stop the live session but keep credentials (quick re-connect later)
+curl -X POST -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/disconnect"
+
+# Permanently remove the session — credentials are deleted, next pair requires a fresh QR
+curl -X DELETE -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM"
+```
+
+Check whether a recipient is on WhatsApp:
+
+```bash
+curl -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/check?phone=+14155551234"
+```
+
+Surface verification SMS codes during WhatsApp account signup:
+
+```bash
+curl -H "Authorization: Bearer $TB_KEY" \
+  "https://api.textbubbles.com/v1/whatsapp/numbers/$NUM/signup-codes"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "windowMinutes": 15,
+    "codes": [
+      {
+        "code": "123456",
+        "messageId": "msg_xyz",
+        "from": "+15555550000",
+        "channel": "sms",
+        "receivedAt": "2026-04-20T21:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+Send a reaction (same endpoint as iMessage):
+
+```bash
+curl -X POST -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+  -d '{"type":"love"}' \
+  https://api.textbubbles.com/v1/messages/msg_xxx/reactions
+```
 
 ## Realtime status events
 

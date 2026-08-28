@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "check-llms-drift": "node scripts/check-llms-drift.mjs"
   },
   "dependencies": {
     "next": "^14.2.35",
