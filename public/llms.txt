@@ -64,6 +64,8 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 - PUT /v1/chats/:chatId/name — Rename a group chat (iMessage + WhatsApp)
 - POST /v1/chats/:chatId/participants — Add a participant (iMessage + WhatsApp)
 - DELETE /v1/chats/:chatId/participants/:participantId — Remove a participant (iMessage + WhatsApp)
+- POST /v1/chats/:chatId/icon — Set or replace the group chat icon (`imageUrl` or `imageBase64`; iMessage + WhatsApp); emits chat.photo.changed
+- DELETE /v1/chats/:chatId/icon — Remove the group chat icon (iMessage + WhatsApp); emits chat.photo.changed with `photoUrl: null`
 - POST /v1/chats/:chatId/leave — Leave a group chat (iMessage + WhatsApp)
 - POST /v1/chats/:chatId/read | unread — iMessage only; 400 CHANNEL_NOT_SUPPORTED on WhatsApp
 - POST /v1/chats/:chatId/typing — Typing indicator (start/stop; iMessage + WhatsApp)
@@ -74,7 +76,8 @@ curl -X POST https://api.textbubbles.com/v1/messages \
 
 ### Webhook Events (selected)
 - message.inbound, message.sent, message.delivered, message.read, message.failed — include `chat` and `sender` fragments when attributed to a known chat. `chat` also ships under the legacy alias `conversation` (`id`/`groupName` field names) on the same payloads.
-- chat.participant.added, chat.participant.left, chat.title.changed, chat.photo.changed — emitted when iMessage group state changes
+- chat.participant.added, chat.participant.left, chat.title.changed — emitted when iMessage group state changes
+- chat.photo.changed — group chat photo set, replaced, or removed (iMessage or WhatsApp); payload carries the canonical `chat` fragment and a signed `photoUrl` (null on delete, omitted if the photo could not be captured)
 
 ### Numbers
 - GET /v1/numbers — List available sender addresses

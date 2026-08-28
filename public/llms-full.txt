@@ -1312,9 +1312,9 @@ Fired when a chat-state action occurs on an iMessage or WhatsApp group chat.
 | chat.participant.added | Participant added to a group chat |
 | chat.participant.left | Participant removed from (or left) a group chat |
 | chat.title.changed | Group chat title set or changed |
-| chat.photo.changed | Group chat photo updated (iMessage only) |
+| chat.photo.changed | Group chat photo set, replaced, or removed (iMessage or WhatsApp) |
 
-Single-emit dedup: when a customer initiates a rename / add / remove via /v1/chats/* AND the upstream provider fires its own state-change event for the same change, the corresponding webhook (chat.title.changed / chat.participant.added / chat.participant.left) is emitted exactly once. Dedup window is 60 seconds. Implement handlers to be idempotent on `eventId` regardless.
+Single-emit dedup: when a customer initiates a rename / participant change / icon change via /v1/chats/* AND the upstream provider fires its own state-change event for the same change, the corresponding webhook (chat.title.changed / chat.participant.added / chat.participant.left / chat.photo.changed) is emitted exactly once. Dedup window is 60 seconds. Implement handlers to be idempotent on `eventId` regardless.
 
 ## Scheduled Message Events
 
@@ -1776,7 +1776,6 @@ All chat events share the same envelope:
   "type": "chat.photo.changed",
   "timestamp": "2026-04-21T10:10:00.000Z",
   "data": {
-    "externalMessageId": "<system-event-guid>",
     "chatId": "550e8400-e29b-41d4-a716-446655440000",
     "chat": {
       "chatId": "550e8400-e29b-41d4-a716-446655440000",
@@ -1787,13 +1786,21 @@ All chat events share the same envelope:
       "participants": []
     },
     "actor": "+14155551234",
-    "to": "+13105550199",
-    "channel": "imessage"
+    "channel": "imessage",
+    "photoUrl": "https://api.textbubbles.com/v1/attachments/<signed-token>"
   }
 }
 ```
 
-The event does not include the new photo — retrieve it through the chat resource.
+| Field | Type | Description |
+|-------|------|-------------|
+| chatId | string | Conversation UUID |
+| chat | object | Canonical chat fragment after the photo change |
+| actor | string \| undefined | Handle of the contact who changed the photo (when provided by the channel) |
+| channel | string | imessage or whatsapp |
+| photoUrl | string \| null \| undefined | Signed URL to the new chat photo; null when the photo was removed; omitted if the photo could not be captured (the event still fires) |
+
+When the icon change is initiated by a customer via POST /v1/chats/:chatId/icon or DELETE /v1/chats/:chatId/icon AND the provider also fires its own event, the webhook is emitted exactly once (60-second dedup window). Implement handlers to be idempotent on `eventId` either way.
 
 ---
 
@@ -1967,6 +1974,39 @@ curl -X DELETE \
 ```
 
 Response: `{ "success": true, "data": { "chat": ChatFragment, "removedParticipant": { "handle": "+14155550100", ... } } }`.
+
+## POST /v1/chats/:chatId/icon
+
+Set or replace the group chat icon. Group chats only. Works on iMessage and WhatsApp. Supply exactly one of `imageUrl` (publicly downloadable URL the API fetches server-side) or `imageBase64` (raw base64-encoded bytes).
+
+```bash
+curl -X POST https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/icon \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "imageUrl": "https://example.com/team-photo.jpg", "mimeType": "image/jpeg" }'
+```
+
+Body:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| imageUrl | string | One of | Publicly reachable URL of the new icon |
+| imageBase64 | string | One of | Base64-encoded image bytes |
+| mimeType | string | No | MIME type hint (inferred from upstream Content-Type when omitted) |
+| filename | string | No | Optional filename hint |
+
+Response: `{ "success": true, "data": { "chat": ChatFragment, "photoUrl": "<signed-url>" } }`. `photoUrl` may be `null` when the change reached the provider but the persisted copy could not be captured (transient storage failure) — the change still goes through and `chat.photo.changed` still fires. Emits `chat.photo.changed`.
+
+## DELETE /v1/chats/:chatId/icon
+
+Remove the group chat icon. Group chats only. Works on iMessage and WhatsApp.
+
+```bash
+curl -X DELETE https://api.textbubbles.com/v1/chats/iMessage%3B%2B%3Bchat1234567890/icon \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Response: `{ "success": true, "data": { "chat": ChatFragment, "photoUrl": null } }`. Emits `chat.photo.changed` with `photoUrl: null`.
 
 ## POST /v1/chats/:chatId/leave
 
@@ -2252,6 +2292,8 @@ Base URL: https://api.textbubbles.com
 - PUT /v1/chats/:chatId/name — Rename a group chat (iMessage + WhatsApp)
 - POST /v1/chats/:chatId/participants — Add a participant (iMessage + WhatsApp)
 - DELETE /v1/chats/:chatId/participants/:participantId — Remove a participant (iMessage + WhatsApp)
+- POST /v1/chats/:chatId/icon — Set or replace the group chat icon (imageUrl or imageBase64; iMessage + WhatsApp); emits chat.photo.changed
+- DELETE /v1/chats/:chatId/icon — Remove the group chat icon (iMessage + WhatsApp); emits chat.photo.changed with photoUrl: null
 - POST /v1/chats/:chatId/leave — Leave a group chat (iMessage + WhatsApp)
 - POST /v1/chats/:chatId/read — Mark a chat as read (iMessage only — 400 CHANNEL_NOT_SUPPORTED on WhatsApp)
 - POST /v1/chats/:chatId/unread — Mark a chat as unread (iMessage only — 400 CHANNEL_NOT_SUPPORTED on WhatsApp)
@@ -2479,7 +2521,7 @@ curl -X POST "https://api.textbubbles.com/v1/chats/120363025123456789@g.us/typin
 
 ## Webhook idempotency
 
-chat.title.changed, chat.participant.added, and chat.participant.left can fire from two paths: a customer-initiated REST call, and a provider state-change event observed shortly after. For changes initiated through /v1/chats/*, the webhook is emitted exactly once within a 60-second dedup window. Implement handlers to be idempotent on `eventId` regardless.
+chat.title.changed, chat.participant.added, chat.participant.left, and chat.photo.changed can fire from two paths: a customer-initiated REST call, and a provider state-change event observed shortly after. For changes initiated through /v1/chats/*, the webhook is emitted exactly once within a 60-second dedup window. Implement handlers to be idempotent on `eventId` regardless.
 
 ## Participant fields (WhatsApp)
 

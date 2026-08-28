@@ -55,9 +55,9 @@ Fired when a contact performs a chat-state action on an iMessage or WhatsApp gro
 | `chat.participant.added` | A participant was added to a group chat |
 | `chat.participant.left` | A participant was removed from (or left) a group chat |
 | `chat.title.changed` | A group chat's title was set or changed |
-| `chat.photo.changed` | A group chat's photo was updated (iMessage only) |
+| `chat.photo.changed` | A group chat's photo was set, replaced, or removed (iMessage or WhatsApp) |
 
-> **Single-emit dedup window.** When a customer initiates a rename / add / remove via `POST /v1/chats/:chatId/name`, `POST /v1/chats/:chatId/participants`, or `DELETE /v1/chats/:chatId/participants/:participantId` **and** the upstream provider also fires its own state-change event, the corresponding webhook (`chat.title.changed` / `chat.participant.added` / `chat.participant.left`) is emitted exactly once — duplicates within a 60-second window are suppressed. Implement your handler to be idempotent on `eventId` either way.
+> **Single-emit dedup window.** When a customer initiates a rename / participant change / icon change via `POST /v1/chats/:chatId/name`, `POST /v1/chats/:chatId/participants`, `DELETE /v1/chats/:chatId/participants/:participantId`, `POST /v1/chats/:chatId/icon`, or `DELETE /v1/chats/:chatId/icon` **and** the upstream provider also fires its own state-change event, the corresponding webhook (`chat.title.changed` / `chat.participant.added` / `chat.participant.left` / `chat.photo.changed`) is emitted exactly once — duplicates within a 60-second window are suppressed. Implement your handler to be idempotent on `eventId` either way.
 
 ## Scheduled Message Events
 
@@ -602,7 +602,6 @@ All chat events share the same envelope. Each carries:
   "type": "chat.photo.changed",
   "timestamp": "2026-04-21T10:10:00.000Z",
   "data": {
-    "externalMessageId": "<system-event-guid>",
     "chatId": "550e8400-e29b-41d4-a716-446655440000",
     "chat": {
       "chatId": "550e8400-e29b-41d4-a716-446655440000",
@@ -613,13 +612,21 @@ All chat events share the same envelope. Each carries:
       "participants": []
     },
     "actor": "+14155551234",
-    "to": "+13105550199",
-    "channel": "imessage"
+    "channel": "imessage",
+    "photoUrl": "https://api.textbubbles.com/v1/attachments/<signed-token>"
   }
 }
 ```
 
-The event does not include the new photo — retrieve it through the chat resource.
+| Field | Type | Description |
+|-------|------|-------------|
+| `chatId` | string | Conversation UUID |
+| `chat` | object | Canonical chat fragment after the photo change |
+| `actor` | string \| undefined | Handle of the contact who changed the photo (when provided by the channel) |
+| `channel` | string | `"imessage"` or `"whatsapp"` |
+| `photoUrl` | string \| null \| undefined | Signed URL to the new chat photo; `null` when the photo was removed; omitted if the photo could not be captured (the event still fires) |
+
+> When the icon change is initiated by a customer via `POST /v1/chats/:chatId/icon` or `DELETE /v1/chats/:chatId/icon` AND the provider also fires its own event, the webhook is emitted exactly once (60-second dedup window). Implement your handler to be idempotent on `eventId` either way.
 
 ## Subscribing to Events
 
